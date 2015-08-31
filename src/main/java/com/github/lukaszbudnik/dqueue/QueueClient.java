@@ -6,18 +6,11 @@ import com.datastax.driver.core.querybuilder.Insert;
 import com.datastax.driver.core.querybuilder.QueryBuilder;
 import com.datastax.driver.core.querybuilder.Select;
 import com.datastax.driver.core.utils.UUIDs;
-import com.github.lukaszbudnik.cloudtag.CloudTagEnsembleProvider;
-import com.github.lukaszbudnik.cloudtag.CloudTagPropertiesModule;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.inject.Guice;
-import com.google.inject.Injector;
 import org.apache.commons.io.IOUtils;
-import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
-import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
-import org.apache.curator.retry.ExponentialBackoffRetry;
 
 import java.nio.ByteBuffer;
 import java.text.DateFormat;
@@ -40,29 +33,21 @@ public class QueueClient implements AutoCloseable {
     private Session session;
 
     // zookeeper
-    private CuratorFramework client;
+    private CuratorFramework zookeeperClient;
 
     private ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("dqueue-thread-%d").build();
     private ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(), threadFactory);
 
-    public QueueClient(int cassandraPort, String[] cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables) throws Exception {
+    public QueueClient(int cassandraPort, String[] cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient) throws Exception {
         this.cassandraPort = cassandraPort;
         this.cassandraAddress = cassandraAddress;
         this.cassandraKeyspace = cassandraKeyspace;
         this.cassandraTablePrefix = cassandraTablePrefix;
         this.cassandraCreateTables = cassandraCreateTables;
+        this.zookeeperClient = zookeeperClient;
 
         cluster = Cluster.builder().withPort(cassandraPort).addContactPoints(cassandraAddress).build();
         session = cluster.connect();
-
-        Injector injector = Guice.createInjector(new CloudTagPropertiesModule());
-        CloudTagEnsembleProvider cloudTagEnsembleProvider = injector.getInstance(CloudTagEnsembleProvider.class);
-
-        RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
-        client = CuratorFrameworkFactory.builder().ensembleProvider(cloudTagEnsembleProvider).retryPolicy(retryPolicy).build();
-        client.start();
-        // warm up zookeeper client
-        client.getChildren().forPath("/");
     }
 
     Session getSession() {
@@ -130,7 +115,7 @@ public class QueueClient implements AutoCloseable {
             @Override
             public Map<String, Object> call() throws Exception {
 
-                InterProcessMutex interProcessMutex = new InterProcessMutex(client, "/dqueue/" + tableName);
+                InterProcessMutex interProcessMutex = new InterProcessMutex(zookeeperClient, "/dqueue/" + tableName);
 
                 try {
                     interProcessMutex.acquire();
@@ -178,7 +163,7 @@ public class QueueClient implements AutoCloseable {
     @Override
     public void close() throws Exception {
         executorService.shutdown();
-        IOUtils.closeQuietly(client);
+        IOUtils.closeQuietly(zookeeperClient);
         IOUtils.closeQuietly(session);
         IOUtils.closeQuietly(cluster);
     }

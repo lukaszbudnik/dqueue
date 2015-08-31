@@ -1,19 +1,44 @@
 package com.github.lukaszbudnik.dqueue;
 
+
+import com.google.inject.Inject;
+import org.apache.curator.framework.CuratorFramework;
+
+import javax.inject.Named;
+
 public class QueueClientBuilder {
 
-    private int cassandraPort;
-    private String[] cassandraAddress;
-    private String cassandraKeyspace;
-    private String cassandraTablePrefix;
-    private boolean cassandraCreateTables;
+    private static final int DEFAULT_CASSANDRA_PORT = 9042;
 
-    public QueueClientBuilder(int cassandraPort, String[] cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables) {
+    @Inject(optional = true)
+    @Named("dqueue.cassandraPort")
+    private int cassandraPort = DEFAULT_CASSANDRA_PORT;
+
+    @Inject
+    @Named("dqueue.cassandraAddress")
+    private String cassandraAddress;
+
+    @Inject
+    @Named("dqueue.cassandraKeyspace")
+    private String cassandraKeyspace;
+
+    @Inject
+    @Named("dqueue.cassandraTablePrefix")
+    private String cassandraTablePrefix;
+
+    @Inject(optional = true)
+    @Named("dqueue.cassandraCreateTables")
+    private boolean cassandraCreateTables = true;
+
+    private CuratorFramework zookeeperClient;
+
+    public QueueClientBuilder(int cassandraPort, String cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient) {
         this.cassandraPort = cassandraPort;
         this.cassandraAddress = cassandraAddress;
         this.cassandraKeyspace = cassandraKeyspace;
         this.cassandraTablePrefix = cassandraTablePrefix;
         this.cassandraCreateTables = cassandraCreateTables;
+        this.zookeeperClient = zookeeperClient;
     }
 
     public QueueClientBuilder() {
@@ -24,7 +49,7 @@ public class QueueClientBuilder {
         return this;
     }
 
-    public QueueClientBuilder withCassandraAddress(String[] cassandraAddress) {
+    public QueueClientBuilder withCassandraAddress(String cassandraAddress) {
         this.cassandraAddress = cassandraAddress;
         return this;
     }
@@ -44,9 +69,55 @@ public class QueueClientBuilder {
         return this;
     }
 
+    public QueueClientBuilder withZookeeperClient(CuratorFramework zookeeperClient) {
+        this.zookeeperClient = zookeeperClient;
+        return this;
+    }
+
+
     public QueueClient build() throws Exception {
-        QueueClient queueClient = new QueueClient(cassandraPort, cassandraAddress, cassandraKeyspace, cassandraTablePrefix, cassandraCreateTables);
+        QueueClient queueClient = new QueueClient(cassandraPort, cassandraAddress.split(","), cassandraKeyspace, cassandraTablePrefix, cassandraCreateTables, zookeeperClient);
         return queueClient;
+    }
+
+    public int getCassandraPort() {
+        return cassandraPort;
+    }
+
+    public void setCassandraPort(int cassandraPort) {
+        this.cassandraPort = cassandraPort;
+    }
+
+    public String getCassandraAddress() {
+        return cassandraAddress;
+    }
+
+    public void setCassandraAddress(String cassandraAddress) {
+        this.cassandraAddress = cassandraAddress;
+    }
+
+    public String getCassandraKeyspace() {
+        return cassandraKeyspace;
+    }
+
+    public void setCassandraKeyspace(String cassandraKeyspace) {
+        this.cassandraKeyspace = cassandraKeyspace;
+    }
+
+    public String getCassandraTablePrefix() {
+        return cassandraTablePrefix;
+    }
+
+    public void setCassandraTablePrefix(String cassandraTablePrefix) {
+        this.cassandraTablePrefix = cassandraTablePrefix;
+    }
+
+    public boolean isCassandraCreateTables() {
+        return cassandraCreateTables;
+    }
+
+    public void setCassandraCreateTables(boolean cassandraCreateTables) {
+        this.cassandraCreateTables = cassandraCreateTables;
     }
 
 }

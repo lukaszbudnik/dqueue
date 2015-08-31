@@ -1,7 +1,15 @@
 package com.github.lukaszbudnik.dqueue;
 
 import com.datastax.driver.core.Session;
+import com.github.lukaszbudnik.cloudtag.CloudTagEnsembleProvider;
+import com.github.lukaszbudnik.cloudtag.CloudTagPropertiesModule;
 import com.google.common.collect.ImmutableMap;
+import com.google.inject.Guice;
+import com.google.inject.Injector;
+import org.apache.curator.RetryPolicy;
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -17,23 +25,29 @@ import static org.junit.Assert.assertNull;
 
 public class QueueClientIntegrationTest {
 
-    private int cassandraPort = 32775;
-    private String[] cassandraAddress = new String[]{"192.168.99.100"};
     private String cassandraKeyspace = "test" + System.currentTimeMillis();
-    private String cassandraTablePrefix = "queue";
 
     private QueueClient queueClient;
     private Session session;
 
     @Before
     public void before() throws Exception {
-        queueClient = new QueueClientBuilder()
-                .withCassandraPort(cassandraPort)
-                .withCassandraAddress(cassandraAddress)
+        Injector injector = Guice.createInjector(new CloudTagPropertiesModule(), new QueueClientBuilderGuicePropertiesModule());
+
+        CloudTagEnsembleProvider cloudTagEnsembleProvider = injector.getInstance(CloudTagEnsembleProvider.class);
+        QueueClientBuilder queueClientBuilder = injector.getInstance(QueueClientBuilder.class);
+
+        RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
+        CuratorFramework client = CuratorFrameworkFactory.builder().ensembleProvider(cloudTagEnsembleProvider).retryPolicy(retryPolicy).build();
+        client.start();
+        // warm up zookeeper client
+        client.getChildren().forPath("/");
+
+        queueClient = queueClientBuilder
                 .withCassandraKeyspace(cassandraKeyspace)
-                .withCassandraTablePrefix(cassandraTablePrefix)
-                .withCassandraCreateTables(true)
+                .withZookeeperClient(client)
                 .build();
+
         session = queueClient.getSession();
         session.execute("create keyspace " + cassandraKeyspace + " WITH replication = {'class':'SimpleStrategy', 'replication_factor':3}");
     }
