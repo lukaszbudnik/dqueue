@@ -1,6 +1,7 @@
 package com.github.lukaszbudnik.dqueue;
 
 
+import com.codahale.metrics.MetricRegistry;
 import com.google.inject.Inject;
 import org.apache.curator.framework.CuratorFramework;
 
@@ -32,13 +33,16 @@ public class QueueClientBuilder {
 
     private CuratorFramework zookeeperClient;
 
-    public QueueClientBuilder(int cassandraPort, String cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient) {
+    private MetricRegistry metricRegistry;
+
+    public QueueClientBuilder(int cassandraPort, String cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient, MetricRegistry metricRegistry) {
         this.cassandraPort = cassandraPort;
         this.cassandraAddress = cassandraAddress;
         this.cassandraKeyspace = cassandraKeyspace;
         this.cassandraTablePrefix = cassandraTablePrefix;
         this.cassandraCreateTables = cassandraCreateTables;
         this.zookeeperClient = zookeeperClient;
+        this.metricRegistry = metricRegistry;
     }
 
     public QueueClientBuilder() {
@@ -74,9 +78,13 @@ public class QueueClientBuilder {
         return this;
     }
 
+    public QueueClientBuilder withMetricRegistry(MetricRegistry metricRegistry) {
+        this.metricRegistry = metricRegistry;
+        return this;
+    }
 
     public QueueClient build() throws Exception {
-        QueueClient queueClient = new QueueClient(cassandraPort, cassandraAddress.split(","), cassandraKeyspace, cassandraTablePrefix, cassandraCreateTables, zookeeperClient);
+        QueueClient queueClient = new QueueClient(cassandraPort, cassandraAddress.split(","), cassandraKeyspace, cassandraTablePrefix, cassandraCreateTables, zookeeperClient, metricRegistry);
         return queueClient;
     }
 
@@ -120,4 +128,19 @@ public class QueueClientBuilder {
         this.cassandraCreateTables = cassandraCreateTables;
     }
 
+    public MetricRegistry getMetricRegistry() {
+        return metricRegistry;
+    }
+
+    public void setMetricRegistry(MetricRegistry metricRegistry) {
+        this.metricRegistry = metricRegistry;
+    }
+
+    public CuratorFramework getZookeeperClient() {
+        return zookeeperClient;
+    }
+
+    public void setZookeeperClient(CuratorFramework zookeeperClient) {
+        this.zookeeperClient = zookeeperClient;
+    }
 }

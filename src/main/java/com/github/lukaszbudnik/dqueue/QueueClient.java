@@ -1,5 +1,7 @@
 package com.github.lukaszbudnik.dqueue;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import com.datastax.driver.core.*;
 import com.datastax.driver.core.querybuilder.Delete;
 import com.datastax.driver.core.querybuilder.Insert;
@@ -17,8 +19,12 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 
 public class QueueClient implements AutoCloseable {
 
@@ -35,16 +41,20 @@ public class QueueClient implements AutoCloseable {
     // zookeeper
     private CuratorFramework zookeeperClient;
 
+    // codahale
+    private MetricRegistry metricRegistry;
+
     private ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("dqueue-thread-%d").build();
     private ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(), threadFactory);
 
-    public QueueClient(int cassandraPort, String[] cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient) throws Exception {
+    public QueueClient(int cassandraPort, String[] cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient, MetricRegistry metricRegistry) throws Exception {
         this.cassandraPort = cassandraPort;
         this.cassandraAddress = cassandraAddress;
         this.cassandraKeyspace = cassandraKeyspace;
         this.cassandraTablePrefix = cassandraTablePrefix;
         this.cassandraCreateTables = cassandraCreateTables;
         this.zookeeperClient = zookeeperClient;
+        this.metricRegistry = metricRegistry;
 
         cluster = Cluster.builder().withPort(cassandraPort).addContactPoints(cassandraAddress).build();
         session = cluster.connect();
@@ -54,34 +64,41 @@ public class QueueClient implements AutoCloseable {
         return session;
     }
 
-    public Future<UUID> publish(ByteBuffer contents) {
-        return publish(contents, null);
+    public Future<UUID> publish(UUID startTime, ByteBuffer contents) {
+        if (startTime == null || startTime.version() != 1) {
+            throw new IllegalArgumentException("Start time id must be a valid UUID version 1 identifier");
+        }
+        return publish(startTime, contents, null);
     }
 
-    public Future<UUID> publish(ByteBuffer contents, Map<String, ?> filters) {
-        String tableName = makeSureTableExists(filters);
+    public Future<UUID> publish(UUID startTime, ByteBuffer contents, Map<String, ?> filters) {
+        Future<UUID> publishResult = executorService.submit(() -> {
+            String filterNames = (filters != null ? "." + String.join(".", filters.keySet()) : "");
+            String wholeOperationMetricName = filterNames + ".whole.";
 
-        QueryBuilder queryBuilder = new QueryBuilder(cluster);
-        final UUID startTime = UUIDs.timeBased();
-        DateFormat df = new SimpleDateFormat("yyyy-MM-dd");
-        String primaryKey = df.format(new Date(UUIDs.unixTimestamp(startTime)));
-        final Insert insert = queryBuilder.insertInto(cassandraKeyspace, tableName)
-                .value("key", primaryKey)
-                .value("start_time", startTime)
-                .value("contents", contents);
+            Optional<Timer.Context> publishTimer = Optional.ofNullable(metricRegistry).map(m -> m.timer("dqueue.publish" + wholeOperationMetricName + "timer").time());
 
-        if (filters != null && !filters.isEmpty()) {
-            for (String key : filters.keySet()) {
-                insert.value(key, filters.get(key));
+            String tableName = makeSureTableExists(filters);
+
+            QueryBuilder queryBuilder = new QueryBuilder(cluster);
+            DateFormat df = new SimpleDateFormat("yyyy-MM-dd");
+            String primaryKey = df.format(new Date(UUIDs.unixTimestamp(startTime)));
+            final Insert insert = queryBuilder.insertInto(cassandraKeyspace, tableName)
+                    .value("key", primaryKey)
+                    .value("start_time", startTime)
+                    .value("contents", contents);
+
+            if (filters != null && !filters.isEmpty()) {
+                for (String key : filters.keySet()) {
+                    insert.value(key, filters.get(key));
+                }
             }
-        }
 
-        Future<UUID> publishResult = executorService.submit(new Callable<UUID>() {
-            @Override
-            public UUID call() throws Exception {
-                session.executeAsync(insert).getUninterruptibly();
-                return startTime;
-            }
+            session.executeAsync(insert).getUninterruptibly();
+
+            publishTimer.ifPresent(Timer.Context::stop);
+
+            return startTime;
         });
 
         return publishResult;
@@ -91,69 +108,82 @@ public class QueueClient implements AutoCloseable {
         return consume(null);
     }
 
-    public Future<Map<String, Object>> consume(final Map<String, ?> filters) {
+    public Future<Map<String, Object>> consume(Map<String, ?> filters) {
 
-        DateFormat df = new SimpleDateFormat("yyyy-MM-dd");
-        final String key = df.format(new Date());
-        final String tableName = makeSureTableExists(filters);
-        final QueryBuilder queryBuilder = new QueryBuilder(session.getCluster());
-        final Select.Where select = queryBuilder.select().column("start_time").column("contents")
-                .from(cassandraKeyspace, tableName)
-                .where(QueryBuilder.eq("key", key));
+        Future<Map<String, Object>> itemFuture = executorService.submit(() -> {
 
-        if (filters != null && filters.size() > 0) {
-            for (String filter : filters.keySet()) {
-                select.and(QueryBuilder.eq(filter, filters.get(filter)));
-            }
-        }
+            String filterNames = (filters != null ? "." + String.join(".", filters.keySet()) : "");
+            String wholeOperationMetricName = filterNames + ".whole.";
 
-        select.and(QueryBuilder.lt("start_time", UUIDs.endOf(System.currentTimeMillis())));
+            Optional<Timer.Context> consumeTimer = Optional.ofNullable(metricRegistry).map(m -> m.timer("dqueue.consume" + wholeOperationMetricName + "timer").time());
 
-        select.limit(1);
+            DateFormat df = new SimpleDateFormat("yyyy-MM-dd");
+            String key = df.format(new Date());
+            String tableName = makeSureTableExists(filters);
+            QueryBuilder queryBuilder = new QueryBuilder(session.getCluster());
+            Select.Where select = queryBuilder.select().column("start_time").column("contents")
+                    .from(cassandraKeyspace, tableName)
+                    .where(QueryBuilder.eq("key", key));
 
-        Future<Map<String, Object>> itemFuture = executorService.submit(new Callable<Map<String, Object>>() {
-            @Override
-            public Map<String, Object> call() throws Exception {
-
-                InterProcessMutex interProcessMutex = new InterProcessMutex(zookeeperClient, "/dqueue/" + tableName);
-
-                try {
-                    interProcessMutex.acquire();
-
-                    ImmutableMap.Builder<String, Object> itemBuilder = ImmutableMap.builder();
-
-                    ResultSet resultSet = session.executeAsync(select).getUninterruptibly();
-                    Row row = resultSet.one();
-
-                    if (row == null) {
-                        return null;
-                    }
-
-                    for (ColumnDefinitions.Definition def : resultSet.getColumnDefinitions().asList()) {
-                        Object value = row.get(def.getName(), CodecRegistry.DEFAULT_INSTANCE.codecFor(def.getType()));
-                        itemBuilder.put(def.getName(), value);
-                    }
-
-                    Map<String, Object> map = itemBuilder.build();
-
-                    Delete.Where delete = queryBuilder.delete().from(cassandraKeyspace, tableName)
-                            .where(QueryBuilder.eq("key", key))
-                            .and(QueryBuilder.eq("start_time", map.get("start_time")));
-
-                    if (filters != null && !filters.isEmpty()) {
-                        for (String filter : filters.keySet()) {
-                            delete.and((QueryBuilder.eq(filter, filters.get(filter))));
-                        }
-                    }
-
-                    session.executeAsync(delete).getUninterruptibly();
-
-                    return map;
-                } catch (Exception e) {
-                    throw e;
-                } finally {
-                    interProcessMutex.release();
+            if (filters != null && filters.size() > 0) {
+                for (String filter : filters.keySet()) {
+                    select.and(QueryBuilder.eq(filter, filters.get(filter)));
                 }
+            }
+
+            select.and(QueryBuilder.lt("start_time", UUIDs.endOf(System.currentTimeMillis())));
+
+            select.limit(1);
+
+            InterProcessMutex interProcessMutex = new InterProcessMutex(zookeeperClient, "/dqueue/" + tableName);
+
+            try {
+                String mutexAcquireOperationMetricName = filterNames + ".mutextAcquire.";
+                Optional<Timer.Context> mutexAcquireTimer = Optional.ofNullable(metricRegistry).map(m -> m.timer("dqueue.consume" + mutexAcquireOperationMetricName + "timer").time());
+                interProcessMutex.acquire();
+                mutexAcquireTimer.ifPresent(Timer.Context::stop);
+
+                ImmutableMap.Builder<String, Object> itemBuilder = ImmutableMap.builder();
+
+                String cassandraSelectOperationMetricName = filterNames + ".cassandraSelect.";
+                Optional<Timer.Context> cassandraSelectTimer = Optional.ofNullable(metricRegistry).map(m -> m.timer("dqueue.consume" + cassandraSelectOperationMetricName + "timer").time());
+                ResultSet resultSet = session.executeAsync(select).getUninterruptibly();
+                Row row = resultSet.one();
+                cassandraSelectTimer.ifPresent(Timer.Context::stop);
+
+                if (row == null) {
+                    Optional.empty();
+                    return null;
+                }
+
+                for (ColumnDefinitions.Definition def : resultSet.getColumnDefinitions().asList()) {
+                    Object value = row.get(def.getName(), CodecRegistry.DEFAULT_INSTANCE.codecFor(def.getType()));
+                    itemBuilder.put(def.getName(), value);
+                }
+
+                Map<String, Object> map = itemBuilder.build();
+
+                Delete.Where delete = queryBuilder.delete().from(cassandraKeyspace, tableName)
+                        .where(QueryBuilder.eq("key", key))
+                        .and(QueryBuilder.eq("start_time", map.get("start_time")));
+
+                if (filters != null && !filters.isEmpty()) {
+                    for (String filter : filters.keySet()) {
+                        delete.and((QueryBuilder.eq(filter, filters.get(filter))));
+                    }
+                }
+
+                String cassandraDeleteOperationMetricName = filterNames + ".cassandraDelete.";
+                Optional<Timer.Context> cassandraDeleteTimer = Optional.ofNullable(metricRegistry).map(m -> m.timer("dqueue.consume" + cassandraDeleteOperationMetricName + "timer").time());
+                session.executeAsync(delete).getUninterruptibly();
+                cassandraDeleteTimer.ifPresent(Timer.Context::stop);
+
+                return map;
+            } catch (Exception e) {
+                throw e;
+            } finally {
+                interProcessMutex.release();
+                consumeTimer.ifPresent(Timer.Context::stop);
             }
         });
 
@@ -185,6 +215,7 @@ public class QueueClient implements AutoCloseable {
 
             }
             String createTable = "create table if not exists " + cassandraKeyspace + "." + tableName + " ( key varchar, " + columnsAndTypes + " contents blob, start_time timeuuid, primary key (key, " + columns + " start_time) ) ";
+
             session.execute(createTable);
         }
         return tableName;

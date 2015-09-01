@@ -1,6 +1,9 @@
 package com.github.lukaszbudnik.dqueue;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import com.datastax.driver.core.Session;
+import com.datastax.driver.core.utils.UUIDs;
 import com.github.lukaszbudnik.cloudtag.CloudTagEnsembleProvider;
 import com.github.lukaszbudnik.cloudtag.CloudTagPropertiesModule;
 import com.google.common.collect.ImmutableMap;
@@ -16,6 +19,7 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
+import java.util.SortedMap;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -29,6 +33,7 @@ public class QueueClientIntegrationTest {
 
     private QueueClient queueClient;
     private Session session;
+    private MetricRegistry metricRegistry;
 
     @Before
     public void before() throws Exception {
@@ -43,9 +48,12 @@ public class QueueClientIntegrationTest {
         // warm up zookeeper client
         client.getChildren().forPath("/");
 
+        metricRegistry = new MetricRegistry();
+
         queueClient = queueClientBuilder
                 .withCassandraKeyspace(cassandraKeyspace)
                 .withZookeeperClient(client)
+                .withMetricRegistry(metricRegistry)
                 .build();
 
         session = queueClient.getSession();
@@ -55,6 +63,18 @@ public class QueueClientIntegrationTest {
     @After
     public void after() throws Exception {
         session.execute("drop keyspace " + cassandraKeyspace);
+
+        SortedMap<String, Timer> timers = metricRegistry.getTimers();
+
+        timers.keySet().stream().forEach(k -> {
+            Timer t = timers.get(k);
+            System.out.println(k);
+            System.out.println("\ttimes called ==> " + t.getCount());
+            System.out.println("\tmedian ==> " + t.getSnapshot().getMedian() / 1000);
+            System.out.println("\t75th percentile ==> " + t.getSnapshot().get75thPercentile() / 1000);
+            System.out.println("\t99th percentile ==> " + t.getSnapshot().get99thPercentile() / 1000);
+        });
+
         queueClient.close();
     }
 
@@ -69,11 +89,12 @@ public class QueueClientIntegrationTest {
 
     @Test
     public void shouldPublishAndConsumeWithoutFilters() throws ExecutionException, InterruptedException {
+        UUID startTime = UUIDs.timeBased();
         String name = "name 1";
         ByteBuffer contents = ByteBuffer.wrap(name.getBytes());
 
-        Future<UUID> publishFuture = queueClient.publish(contents);
-        UUID startTime = publishFuture.get();
+        Future<UUID> publishFuture = queueClient.publish(startTime, contents);
+        publishFuture.get();
 
         Future<Map<String, Object>> itemFuture = queueClient.consume();
 
@@ -99,9 +120,10 @@ public class QueueClientIntegrationTest {
                 .put("version", version)
                 .put("routing_key", routingKey);
 
+        UUID startTime = UUIDs.timeBased();
         ByteBuffer contents = ByteBuffer.wrap("contents".getBytes());
-        Future<UUID> publishFuture = queueClient.publish(contents, builder.build());
-        UUID startTime = publishFuture.get();
+        Future<UUID> publishFuture = queueClient.publish(startTime, contents, builder.build());
+        publishFuture.get();
 
         Future<Map<String, Object>> itemFuture = queueClient.consume(builder.build());
 
@@ -120,6 +142,9 @@ public class QueueClientIntegrationTest {
         Integer version = 123;
         Integer type = 1;
 
+        UUID startTime1 = UUIDs.timeBased();
+        UUID startTime2 = UUIDs.timeBased();
+        UUID startTime3 = UUIDs.timeBased();
         ByteBuffer contents1 = ByteBuffer.wrap("contents1".getBytes());
         ByteBuffer contents2 = ByteBuffer.wrap("contents2".getBytes());
         ByteBuffer contents3 = ByteBuffer.wrap("contents3".getBytes());
@@ -130,15 +155,15 @@ public class QueueClientIntegrationTest {
                 .put("version", version)
                 .put("routing_key", routingKey);
 
-        Future<UUID> publishFuture1 = queueClient.publish(contents1, builder.build());
-        UUID startTime1 = publishFuture1.get();
+        Future<UUID> publishFuture1 = queueClient.publish(startTime1, contents1, builder.build());
+        publishFuture1.get();
 
 
-        Future<UUID> publishFuture2 = queueClient.publish(contents2, builder.build());
-        UUID startTime2 = publishFuture2.get();
+        Future<UUID> publishFuture2 = queueClient.publish(startTime2, contents2, builder.build());
+        publishFuture2.get();
 
-        Future<UUID> publishFuture3 = queueClient.publish(contents3, builder.build());
-        UUID startTime3 = publishFuture3.get();
+        Future<UUID> publishFuture3 = queueClient.publish(startTime3, contents3, builder.build());
+        publishFuture3.get();
 
         Future<Map<String, Object>> itemFuture1 = queueClient.consume(builder.build());
         Map<String, Object> item1 = itemFuture1.get();
