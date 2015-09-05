@@ -15,10 +15,19 @@ public class QueueClientBuilderGuicePropertiesModuleTest {
 
         QueueClientBuilder queueClientBuilder = injector.getInstance(QueueClientBuilder.class);
 
-        assertEquals("dqueue_keyspace", queueClientBuilder.getCassandraKeyspace());
+        // in test dqueue properties file cassandra keyspace is set to dynamic value:
+        // ${properties['java.version']}
+        String javaVersion = System.getProperty("java.version");
+        assertEquals(javaVersion, queueClientBuilder.getCassandraKeyspace());
+
+        // in test dqueue properties file cassandra table prefix is set to dynamic value:
+        // ${env['HOME']}
+        String home = System.getenv("HOME");
+        assertEquals(home, queueClientBuilder.getCassandraTablePrefix());
+
+        // other settings are literal
         assertEquals(11111, queueClientBuilder.getCassandraPort());
         assertEquals("cassandra1.docker,cassandra2.docker", queueClientBuilder.getCassandraAddress());
-        assertEquals("dqueue", queueClientBuilder.getCassandraTablePrefix());
         assertFalse(queueClientBuilder.isCassandraCreateTables());
     }
 
