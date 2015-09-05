@@ -3,9 +3,9 @@ package com.github.lukaszbudnik.dqueue;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.inject.Inject;
+import com.google.inject.name.Named;
 import org.apache.curator.framework.CuratorFramework;
 
-import javax.inject.Named;
 
 public class QueueClientBuilder {
 

@@ -9,50 +9,52 @@ import com.github.lukaszbudnik.cloudtag.CloudTagPropertiesModule;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
+import org.apache.commons.io.IOUtils;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.*;
 
 import java.nio.ByteBuffer;
-import java.util.Map;
+import java.util.Optional;
 import java.util.SortedMap;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertFalse;
 
 public class QueueClientIntegrationTest {
 
-    private String cassandraKeyspace = "test" + System.currentTimeMillis();
+    private static Injector injector = Guice.createInjector(new CloudTagPropertiesModule(), new QueueClientBuilderGuicePropertiesModule());
+    private static CuratorFramework zookeeperClient;
 
+    private String cassandraKeyspace = "test" + System.currentTimeMillis();
     private QueueClient queueClient;
     private Session session;
     private MetricRegistry metricRegistry;
 
+    @BeforeClass
+    public static void beforeClass() throws Exception {
+        CloudTagEnsembleProvider cloudTagEnsembleProvider = injector.getInstance(CloudTagEnsembleProvider.class);
+        RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
+        zookeeperClient = CuratorFrameworkFactory.builder().ensembleProvider(cloudTagEnsembleProvider).retryPolicy(retryPolicy).build();
+        zookeeperClient.start();
+        // warm up zookeeper zookeeperClient - on my macbook pro takes even up to 10 seconds
+        zookeeperClient.getChildren().forPath("/");
+    }
+
     @Before
     public void before() throws Exception {
-        Injector injector = Guice.createInjector(new CloudTagPropertiesModule(), new QueueClientBuilderGuicePropertiesModule());
-
-        CloudTagEnsembleProvider cloudTagEnsembleProvider = injector.getInstance(CloudTagEnsembleProvider.class);
         QueueClientBuilder queueClientBuilder = injector.getInstance(QueueClientBuilder.class);
-
-        RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
-        CuratorFramework client = CuratorFrameworkFactory.builder().ensembleProvider(cloudTagEnsembleProvider).retryPolicy(retryPolicy).build();
-        client.start();
-        // warm up zookeeper client
-        client.getChildren().forPath("/");
 
         metricRegistry = new MetricRegistry();
 
         queueClient = queueClientBuilder
                 .withCassandraKeyspace(cassandraKeyspace)
-                .withZookeeperClient(client)
+                .withZookeeperClient(zookeeperClient)
                 .withMetricRegistry(metricRegistry)
                 .build();
 
@@ -70,21 +72,26 @@ public class QueueClientIntegrationTest {
             Timer t = timers.get(k);
             System.out.println(k);
             System.out.println("\ttimes called ==> " + t.getCount());
-            System.out.println("\tmedian ==> " + t.getSnapshot().getMedian() / 1000);
-            System.out.println("\t75th percentile ==> " + t.getSnapshot().get75thPercentile() / 1000);
-            System.out.println("\t99th percentile ==> " + t.getSnapshot().get99thPercentile() / 1000);
+            System.out.println("\tmedian ==> " + t.getSnapshot().getMedian() / 1000 / 1000);
+            System.out.println("\t75th percentile ==> " + t.getSnapshot().get75thPercentile() / 1000 / 1000);
+            System.out.println("\t99th percentile ==> " + t.getSnapshot().get99thPercentile() / 1000 / 1000);
         });
 
         queueClient.close();
     }
 
+    @AfterClass
+    public static void afterClass() {
+        IOUtils.closeQuietly(zookeeperClient);
+    }
+
     @Test
     public void shouldReturnNothingIfQueueIsEmpty() throws ExecutionException, InterruptedException {
-        Future<Map<String, Object>> itemFuture = queueClient.consume(ImmutableMap.of("type", 123));
+        Future<Optional<Item>> itemFuture = queueClient.consume(ImmutableMap.of("type", 123));
 
-        Map<String, Object> item = itemFuture.get();
+        Optional<Item> item = itemFuture.get();
 
-        assertNull(item);
+        assertFalse(item.isPresent());
     }
 
     @Test
@@ -93,15 +100,15 @@ public class QueueClientIntegrationTest {
         String name = "name 1";
         ByteBuffer contents = ByteBuffer.wrap(name.getBytes());
 
-        Future<UUID> publishFuture = queueClient.publish(startTime, contents);
+        Future<UUID> publishFuture = queueClient.publish(new Item(startTime, contents));
         publishFuture.get();
 
-        Future<Map<String, Object>> itemFuture = queueClient.consume();
+        Future<Optional<Item>> itemFuture = queueClient.consume();
 
-        Map<String, Object> item = itemFuture.get();
+        Optional<Item> item = itemFuture.get();
 
-        UUID consumedStartTime = (UUID) item.get("start_time");
-        ByteBuffer consumedContents = (ByteBuffer) item.get("contents");
+        UUID consumedStartTime = item.get().getStartTime();
+        ByteBuffer consumedContents = item.get().getContents();
 
         assertEquals(startTime, consumedStartTime);
         assertEquals(contents, consumedContents);
@@ -122,15 +129,15 @@ public class QueueClientIntegrationTest {
 
         UUID startTime = UUIDs.timeBased();
         ByteBuffer contents = ByteBuffer.wrap("contents".getBytes());
-        Future<UUID> publishFuture = queueClient.publish(startTime, contents, builder.build());
+        Future<UUID> publishFuture = queueClient.publish(new Item(startTime, contents, builder.build()));
         publishFuture.get();
 
-        Future<Map<String, Object>> itemFuture = queueClient.consume(builder.build());
+        Future<Optional<Item>> itemFuture = queueClient.consume(builder.build());
 
-        Map<String, Object> item = itemFuture.get();
+        Optional<Item> item = itemFuture.get();
 
-        UUID consumedStartTime = (UUID) item.get("start_time");
-        ByteBuffer consumedContents = (ByteBuffer) item.get("contents");
+        UUID consumedStartTime = item.get().getStartTime();
+        ByteBuffer consumedContents = item.get().getContents();
 
         assertEquals(startTime, consumedStartTime);
         assertEquals(contents, consumedContents);
@@ -155,30 +162,29 @@ public class QueueClientIntegrationTest {
                 .put("version", version)
                 .put("routing_key", routingKey);
 
-        Future<UUID> publishFuture1 = queueClient.publish(startTime1, contents1, builder.build());
+        Future<UUID> publishFuture1 = queueClient.publish(new Item(startTime1, contents1, builder.build()));
         publishFuture1.get();
 
 
-        Future<UUID> publishFuture2 = queueClient.publish(startTime2, contents2, builder.build());
+        Future<UUID> publishFuture2 = queueClient.publish(new Item(startTime2, contents2, builder.build()));
         publishFuture2.get();
 
-        Future<UUID> publishFuture3 = queueClient.publish(startTime3, contents3, builder.build());
+        Future<UUID> publishFuture3 = queueClient.publish(new Item(startTime3, contents3, builder.build()));
         publishFuture3.get();
 
-        Future<Map<String, Object>> itemFuture1 = queueClient.consume(builder.build());
-        Map<String, Object> item1 = itemFuture1.get();
-        UUID consumedStartTime1 = (UUID) item1.get("start_time");
+        Future<Optional<Item>> itemFuture1 = queueClient.consume(builder.build());
+        Optional<Item> item1 = itemFuture1.get();
+        UUID consumedStartTime1 = item1.get().getStartTime();
         assertEquals(startTime1, consumedStartTime1);
 
-        Future<Map<String, Object>> itemFuture2 = queueClient.consume(builder.build());
-        Map<String, Object> item2 = itemFuture2.get();
-        UUID consumedStartTime2 = (UUID) item2.get("start_time");
+        Future<Optional<Item>> itemFuture2 = queueClient.consume(builder.build());
+        Optional<Item> item2 = itemFuture2.get();
+        UUID consumedStartTime2 = item2.get().getStartTime();
         assertEquals(startTime2, consumedStartTime2);
 
-        Future<Map<String, Object>> itemFuture3 = queueClient.consume(builder.build());
-        Map<String, Object> item3 = itemFuture3.get();
-        UUID consumedStartTime3 = (UUID) item3.get("start_time");
+        Future<Optional<Item>> itemFuture3 = queueClient.consume(builder.build());
+        Optional<Item> item3 = itemFuture3.get();
+        UUID consumedStartTime3 = item3.get().getStartTime();
         assertEquals(startTime3, consumedStartTime3);
-
     }
 }
