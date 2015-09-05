@@ -40,6 +40,9 @@ public class QueueClientPerformanceTest {
 
     @BeforeClass
     public static void beforeClass() throws Exception {
+        // don't run on travis!
+        Assume.assumeFalse(System.getenv().containsKey("TRAVIS"));
+
         CloudTagEnsembleProvider cloudTagEnsembleProvider = injector.getInstance(CloudTagEnsembleProvider.class);
         RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
         zookeeperClient = CuratorFrameworkFactory.builder().ensembleProvider(cloudTagEnsembleProvider).retryPolicy(retryPolicy).build();
