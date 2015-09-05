@@ -1,16 +1,19 @@
 language: java
-sudo: reguired
+sudo: false
 jdk:
   - oraclejdk8
 env:
   - DEPLOY_USERNAME=travis DEPLOY_PASSWORD=secret
-services:
-  - cassandra
 before_install:
   - wget http://ftp.ps.pl/pub/apache/zookeeper/zookeeper-3.4.6/zookeeper-3.4.6.tar.gz
   - tar -xzf zookeeper-3.4.6.tar.gz
   - cd zookeeper-3.4.6
   - bin/zkServer.sh start conf/zoo_sample.cfg
+  - cd ..
+  - wget http://ftp.ps.pl/pub/apache//cassandra/2.2.1/apache-cassandra-2.2.1-bin.tar.gz
+  - tar -xzf apache-cassandra-2.2.1-bin.tar.gz
+  - cd apache-cassandra-2.2.1
+  - bin/cassandra
   - cd ..
 after_failure:
   - gradle printTestErrors
