@@ -14,7 +14,7 @@ import com.codahale.metrics.Timer;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.utils.UUIDs;
 import com.github.lukaszbudnik.cloudtag.CloudTagEnsembleProvider;
-import com.github.lukaszbudnik.cloudtag.CloudTagPropertiesModule;
+import com.github.lukaszbudnik.gpe.PropertiesElResolverModule;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
@@ -39,7 +39,7 @@ import static org.junit.Assert.fail;
 public class QueueClientPerformanceTest {
 
     private static final int NUMBER_OF_ITERATIONS = 10_000;
-    private static Injector injector = Guice.createInjector(new CloudTagPropertiesModule(), new QueueClientBuilderGuicePropertiesModule());
+    private static Injector injector;
     private static CuratorFramework zookeeperClient;
 
     private String cassandraKeyspace = "test" + System.currentTimeMillis();
@@ -51,6 +51,8 @@ public class QueueClientPerformanceTest {
     public static void beforeClass() throws Exception {
         // don't run on travis!
         Assume.assumeFalse(System.getenv().containsKey("TRAVIS"));
+
+        injector = Guice.createInjector(new PropertiesElResolverModule(Arrays.asList("/dqueue.properties", "/cloudtag.properties")));
 
         CloudTagEnsembleProvider cloudTagEnsembleProvider = injector.getInstance(CloudTagEnsembleProvider.class);
         RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);

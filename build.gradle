@@ -41,11 +41,11 @@ test {
 
 dependencies {
     compile 'com.datastax.cassandra:cassandra-driver-core:2.2.0-rc3'
-    compile 'com.google.inject:guice:4.0'
-    compile 'commons-io:commons-io:2.4'
     compile 'org.apache.curator:curator-recipes:2.7.1'
-    compile 'de.odysseus.juel:juel-api:2.2.7'
-    compile 'de.odysseus.juel:juel-impl:2.2.7'
+    compile 'com.codahale.metrics:metrics-core:3.0.2'
+    compile 'com.codahale.metrics:metrics-healthchecks:3.0.2'
+    compile 'com.github.lukaszbudnik.guice-properties-el:guice-properties-el:1.0.0'
+    compile 'commons-io:commons-io:2.4'
 
     testCompile 'junit:junit:4.12'
     testCompile 'com.github.lukaszbudnik.cloudtag:cloudtag:1.1'

@@ -11,6 +11,7 @@ package com.github.lukaszbudnik.dqueue;
 
 
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.health.HealthCheckRegistry;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
 import org.apache.curator.framework.CuratorFramework;
@@ -43,8 +44,9 @@ public class QueueClientBuilder {
     private CuratorFramework zookeeperClient;
 
     private MetricRegistry metricRegistry;
+    private HealthCheckRegistry healthCheckRegistry;
 
-    public QueueClientBuilder(int cassandraPort, String cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient, MetricRegistry metricRegistry) {
+    public QueueClientBuilder(int cassandraPort, String cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient, MetricRegistry metricRegistry, HealthCheckRegistry healthCheckRegistry) {
         this.cassandraPort = cassandraPort;
         this.cassandraAddress = cassandraAddress;
         this.cassandraKeyspace = cassandraKeyspace;
@@ -52,6 +54,7 @@ public class QueueClientBuilder {
         this.cassandraCreateTables = cassandraCreateTables;
         this.zookeeperClient = zookeeperClient;
         this.metricRegistry = metricRegistry;
+        this.healthCheckRegistry = healthCheckRegistry;
     }
 
     public QueueClientBuilder() {
@@ -92,8 +95,13 @@ public class QueueClientBuilder {
         return this;
     }
 
+    public QueueClientBuilder withHealthMetricRegistry(HealthCheckRegistry healthCheckRegistry) {
+        this.healthCheckRegistry = healthCheckRegistry;
+        return this;
+    }
+
     public QueueClient build() throws Exception {
-        QueueClient queueClient = new QueueClient(cassandraPort, cassandraAddress.split(","), cassandraKeyspace, cassandraTablePrefix, cassandraCreateTables, zookeeperClient, metricRegistry);
+        QueueClient queueClient = new QueueClient(cassandraPort, cassandraAddress.split(","), cassandraKeyspace, cassandraTablePrefix, cassandraCreateTables, zookeeperClient, metricRegistry, healthCheckRegistry);
         return queueClient;
     }
 
@@ -143,6 +151,14 @@ public class QueueClientBuilder {
 
     public void setMetricRegistry(MetricRegistry metricRegistry) {
         this.metricRegistry = metricRegistry;
+    }
+
+    public HealthCheckRegistry getHealthCheckRegistry() {
+        return healthCheckRegistry;
+    }
+
+    public void setHealthCheckRegistry(HealthCheckRegistry healthCheckRegistry) {
+        this.healthCheckRegistry = healthCheckRegistry;
     }
 
     public CuratorFramework getZookeeperClient() {

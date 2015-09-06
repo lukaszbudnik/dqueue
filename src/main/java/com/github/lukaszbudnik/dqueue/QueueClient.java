@@ -11,6 +11,8 @@ package com.github.lukaszbudnik.dqueue;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import com.codahale.metrics.health.HealthCheck;
+import com.codahale.metrics.health.HealthCheckRegistry;
 import com.datastax.driver.core.*;
 import com.datastax.driver.core.querybuilder.Delete;
 import com.datastax.driver.core.querybuilder.Insert;
@@ -48,11 +50,12 @@ public class QueueClient implements AutoCloseable {
 
     // codahale
     private MetricRegistry metricRegistry;
+    private HealthCheckRegistry healthCheckRegistry;
 
     private ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("dqueue-thread-%d").build();
     private ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(), threadFactory);
 
-    public QueueClient(int cassandraPort, String[] cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient, MetricRegistry metricRegistry) throws Exception {
+    public QueueClient(int cassandraPort, String[] cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient, MetricRegistry metricRegistry, HealthCheckRegistry healthCheckRegistry) throws Exception {
         this.cassandraPort = cassandraPort;
         this.cassandraAddress = cassandraAddress;
         this.cassandraKeyspace = cassandraKeyspace;
@@ -60,6 +63,35 @@ public class QueueClient implements AutoCloseable {
         this.cassandraCreateTables = cassandraCreateTables;
         this.zookeeperClient = zookeeperClient;
         this.metricRegistry = metricRegistry;
+        this.healthCheckRegistry = healthCheckRegistry;
+
+        Optional.ofNullable(healthCheckRegistry).ifPresent(hcr -> {
+            hcr.register("zookeeper", new HealthCheck() {
+                @Override
+                protected Result check() throws Exception {
+                    if (zookeeperClient.getZookeeperClient().isConnected()) {
+                        return Result.healthy();
+                    } else {
+                        return Result.unhealthy("Zookeeper client not connected");
+                    }
+                }
+            });
+            hcr.register("cassandra", new HealthCheck() {
+                @Override
+                protected Result check() throws Exception {
+                    int counter = 0;
+                    Session.State state = session.getState();
+                    for (Host host : state.getConnectedHosts()) {
+                        counter += state.getOpenConnections(host);
+                    }
+                    if (counter > 0) {
+                        return Result.healthy();
+                    } else {
+                        return Result.unhealthy("Cassandra client not connected");
+                    }
+                }
+            });
+        });
 
         cluster = Cluster.builder().withPort(cassandraPort).addContactPoints(cassandraAddress).build();
         session = cluster.connect();
@@ -178,7 +210,7 @@ public class QueueClient implements AutoCloseable {
 
         if (filters != null && !filters.isEmpty()) {
             for (String filter : filters.keySet()) {
-                delete.and((QueryBuilder.eq(filter, filters.get(filter))));
+                delete.and(QueryBuilder.eq(filter, filters.get(filter)));
             }
         }
 
