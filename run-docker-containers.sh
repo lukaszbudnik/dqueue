@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#docker run -d -p 80:80 -p 8125:8125/udp -p 8126:8126 --name dqueue-grafana-dashboard kamon/grafana_graphite
+docker ps
 
 docker run -d \
   --name dqueue-graphite-statsd \
