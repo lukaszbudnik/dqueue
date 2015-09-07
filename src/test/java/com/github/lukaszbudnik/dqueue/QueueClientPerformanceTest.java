@@ -43,7 +43,7 @@ public class QueueClientPerformanceTest {
     private static CuratorFramework zookeeperClient;
 
     private String cassandraKeyspace = "test" + System.currentTimeMillis();
-    private QueueClient queueClient;
+    private QueueClientImpl queueClient;
     private Session session;
     private MetricRegistry metricRegistry;
 
@@ -68,7 +68,7 @@ public class QueueClientPerformanceTest {
 
         metricRegistry = new MetricRegistry();
 
-        queueClient = queueClientBuilder
+        queueClient = (QueueClientImpl) queueClientBuilder
                 .withCassandraKeyspace(cassandraKeyspace)
                 .withZookeeperClient(zookeeperClient)
                 .withMetricRegistry(metricRegistry)

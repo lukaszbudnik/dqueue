@@ -20,6 +20,7 @@ import org.apache.curator.framework.CuratorFramework;
 public class QueueClientBuilder {
 
     private static final int DEFAULT_CASSANDRA_PORT = 9042;
+    private static final int DEFAULT_THREAD_POOL_SIZE = 300;
 
     @Inject(optional = true)
     @Named("dqueue.cassandraPort")
@@ -41,21 +42,14 @@ public class QueueClientBuilder {
     @Named("dqueue.cassandraCreateTables")
     private boolean cassandraCreateTables = true;
 
+    @Inject(optional = true)
+    @Named("dqueue.threadPoolSize")
+    private int threadPoolSize = DEFAULT_THREAD_POOL_SIZE;
+
     private CuratorFramework zookeeperClient;
 
     private MetricRegistry metricRegistry;
     private HealthCheckRegistry healthCheckRegistry;
-
-    public QueueClientBuilder(int cassandraPort, String cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient, MetricRegistry metricRegistry, HealthCheckRegistry healthCheckRegistry) {
-        this.cassandraPort = cassandraPort;
-        this.cassandraAddress = cassandraAddress;
-        this.cassandraKeyspace = cassandraKeyspace;
-        this.cassandraTablePrefix = cassandraTablePrefix;
-        this.cassandraCreateTables = cassandraCreateTables;
-        this.zookeeperClient = zookeeperClient;
-        this.metricRegistry = metricRegistry;
-        this.healthCheckRegistry = healthCheckRegistry;
-    }
 
     public QueueClientBuilder() {
     }
@@ -85,6 +79,11 @@ public class QueueClientBuilder {
         return this;
     }
 
+    public QueueClientBuilder withThreadPoolSize(int threadPoolSize) {
+        this.threadPoolSize = threadPoolSize;
+        return this;
+    }
+
     public QueueClientBuilder withZookeeperClient(CuratorFramework zookeeperClient) {
         this.zookeeperClient = zookeeperClient;
         return this;
@@ -101,7 +100,7 @@ public class QueueClientBuilder {
     }
 
     public QueueClient build() throws Exception {
-        QueueClient queueClient = new QueueClient(cassandraPort, cassandraAddress.split(","), cassandraKeyspace, cassandraTablePrefix, cassandraCreateTables, zookeeperClient, metricRegistry, healthCheckRegistry);
+        QueueClientImpl queueClient = new QueueClientImpl(cassandraPort, cassandraAddress.split(","), cassandraKeyspace, cassandraTablePrefix, cassandraCreateTables, zookeeperClient, threadPoolSize, metricRegistry, healthCheckRegistry);
         return queueClient;
     }
 
@@ -143,6 +142,14 @@ public class QueueClientBuilder {
 
     public void setCassandraCreateTables(boolean cassandraCreateTables) {
         this.cassandraCreateTables = cassandraCreateTables;
+    }
+
+    public int getThreadPoolSize() {
+        return threadPoolSize;
+    }
+
+    public void setThreadPoolSize(int threadPoolSize) {
+        this.threadPoolSize = threadPoolSize;
     }
 
     public MetricRegistry getMetricRegistry() {
