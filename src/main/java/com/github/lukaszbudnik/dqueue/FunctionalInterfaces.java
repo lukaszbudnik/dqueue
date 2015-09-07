@@ -9,17 +9,12 @@
  */
 package com.github.lukaszbudnik.dqueue;
 
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.Future;
+@FunctionalInterface
+interface NoArgFunction<R> {
+    R apply() throws Exception;
+}
 
-public interface QueueClient extends AutoCloseable {
-
-    Future<UUID> publish(Item item);
-
-    Future<Optional<Item>> consume();
-
-    Future<Optional<Item>> consume(Map<String, ?> filters);
-
+@FunctionalInterface
+interface NoArgVoidFunction<R> {
+    void apply() throws Exception;
 }

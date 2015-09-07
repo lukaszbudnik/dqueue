@@ -44,7 +44,7 @@ public class QueueClientIntegrationTest {
     private static CuratorFramework zookeeperClient;
 
     private String cassandraKeyspace = "test" + System.currentTimeMillis();
-    private QueueClient queueClient;
+    private QueueClientImpl queueClient;
     private Session session;
     private MetricRegistry metricRegistry;
     private HealthCheckRegistry healthCheckRegistry;
@@ -68,7 +68,7 @@ public class QueueClientIntegrationTest {
         metricRegistry = new MetricRegistry();
         healthCheckRegistry = new HealthCheckRegistry();
 
-        queueClient = queueClientBuilder
+        queueClient = (QueueClientImpl) queueClientBuilder
                 .withCassandraKeyspace(cassandraKeyspace)
                 .withZookeeperClient(zookeeperClient)
                 .withMetricRegistry(metricRegistry)
@@ -97,8 +97,7 @@ public class QueueClientIntegrationTest {
         SortedMap<String, HealthCheck.Result> healthChecks = healthCheckRegistry.runHealthChecks();
         healthChecks.keySet().stream().forEach(k -> {
             HealthCheck.Result healthCheck = healthChecks.get(k);
-            System.out.println(k);
-            System.out.println("is healthy? ==> " + healthCheck.isHealthy());
+            System.out.println(k + " healthy? ==> " + healthCheck.isHealthy());
         });
 
         queueClient.close();
@@ -145,18 +144,18 @@ public class QueueClientIntegrationTest {
         Integer version = 123;
         Integer type = 2;
 
-        ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
-        builder
+        ImmutableMap.Builder<String, Object> filters = ImmutableMap.builder();
+        filters
                 .put("type", type)
                 .put("version", version)
                 .put("routing_key", routingKey);
 
         UUID startTime = UUIDs.timeBased();
         ByteBuffer contents = ByteBuffer.wrap("contents".getBytes());
-        Future<UUID> publishFuture = queueClient.publish(new Item(startTime, contents, builder.build()));
+        Future<UUID> publishFuture = queueClient.publish(new Item(startTime, contents, filters.build()));
         publishFuture.get();
 
-        Future<Optional<Item>> itemFuture = queueClient.consume(builder.build());
+        Future<Optional<Item>> itemFuture = queueClient.consume(filters.build());
 
         Optional<Item> item = itemFuture.get();
 
@@ -180,33 +179,32 @@ public class QueueClientIntegrationTest {
         ByteBuffer contents2 = ByteBuffer.wrap("contents2".getBytes());
         ByteBuffer contents3 = ByteBuffer.wrap("contents3".getBytes());
 
-        ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
-        builder
+        ImmutableMap.Builder<String, Object> filters = ImmutableMap.builder();
+        filters
                 .put("type", type)
                 .put("version", version)
                 .put("routing_key", routingKey);
 
-        Future<UUID> publishFuture1 = queueClient.publish(new Item(startTime1, contents1, builder.build()));
+        Future<UUID> publishFuture1 = queueClient.publish(new Item(startTime1, contents1, filters.build()));
         publishFuture1.get();
 
-
-        Future<UUID> publishFuture2 = queueClient.publish(new Item(startTime2, contents2, builder.build()));
+        Future<UUID> publishFuture2 = queueClient.publish(new Item(startTime2, contents2, filters.build()));
         publishFuture2.get();
 
-        Future<UUID> publishFuture3 = queueClient.publish(new Item(startTime3, contents3, builder.build()));
+        Future<UUID> publishFuture3 = queueClient.publish(new Item(startTime3, contents3, filters.build()));
         publishFuture3.get();
 
-        Future<Optional<Item>> itemFuture1 = queueClient.consume(builder.build());
+        Future<Optional<Item>> itemFuture1 = queueClient.consume(filters.build());
         Optional<Item> item1 = itemFuture1.get();
         UUID consumedStartTime1 = item1.get().getStartTime();
         assertEquals(startTime1, consumedStartTime1);
 
-        Future<Optional<Item>> itemFuture2 = queueClient.consume(builder.build());
+        Future<Optional<Item>> itemFuture2 = queueClient.consume(filters.build());
         Optional<Item> item2 = itemFuture2.get();
         UUID consumedStartTime2 = item2.get().getStartTime();
         assertEquals(startTime2, consumedStartTime2);
 
-        Future<Optional<Item>> itemFuture3 = queueClient.consume(builder.build());
+        Future<Optional<Item>> itemFuture3 = queueClient.consume(filters.build());
         Optional<Item> item3 = itemFuture3.get();
         UUID consumedStartTime3 = item3.get().getStartTime();
         assertEquals(startTime3, consumedStartTime3);
