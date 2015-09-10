@@ -102,3 +102,9 @@ allprojects {
     }
 
 }
+
+project(':dqueue-jaxrs') {
+    dependencies {
+        compile project(':dqueue')
+    }
+}

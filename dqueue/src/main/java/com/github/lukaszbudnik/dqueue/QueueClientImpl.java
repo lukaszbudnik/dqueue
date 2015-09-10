@@ -118,7 +118,7 @@ public class QueueClientImpl implements QueueClient {
         try {
             return function.apply();
         } catch (Exception e) {
-            throw new RuntimeException();
+            throw new RuntimeException(e);
         } finally {
             timer.ifPresent(Timer.Context::stop);
         }

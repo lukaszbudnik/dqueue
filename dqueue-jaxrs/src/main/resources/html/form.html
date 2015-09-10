@@ -1,0 +1,29 @@
+<html>
+<head>
+<script src="//code.jquery.com/jquery-2.1.4.min.js"></script>
+<script src="/js/node-uuid-1.4.0.js"></script>
+<script src="/js/dqueue-1.0.0.js"></script>
+<script type="application/javascript">
+$(function() {
+    $('#startTime').val(uuid.v1())
+});
+</script>
+</head>
+<body>
+<h1>Publish item to the queue</h1>
+<form name="dqueueForm">
+    <p>
+        Start time: <input type="text" name="startTime" id="startTime" size="45" value="" />
+    </p>
+    <p>
+        Select a file: <input type="file" name="contents" id="contents" size="45" />
+    </p>
+    <p>
+        Filters (key1/value1/key2/value2): <input type="text" name="filters" id="filters" size="45" value="" />
+    </p>
+    <p>
+        <input type="button" value="Publish" onclick="dqueue.publish()" />
+    </p>
+</form>
+</body>
+</html>
