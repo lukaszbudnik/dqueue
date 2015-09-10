@@ -1,151 +1,110 @@
-plugins {
-    id 'java'
-    id 'jacoco'
-    id 'maven'
-    id 'signing'
-    id 'com.github.hierynomus.license' version '0.11.0'
-}
+allprojects {
 
-group = 'com.github.lukaszbudnik.dqueue'
-archivesBaseName = 'dqueue'
-version = '0.0.1-SNAPSHOT'
+    apply plugin: 'java'
+    apply plugin: 'jacoco'
+    apply plugin: 'maven'
+    apply plugin: 'signing'
 
-sourceCompatibility = JavaVersion.VERSION_1_8
-targetCompatibility = JavaVersion.VERSION_1_8
+    group = 'com.github.lukaszbudnik.dqueue'
+    version = '0.0.1-SNAPSHOT'
 
-repositories {
-    mavenCentral()
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
 
-    jcenter()
-
-    maven {
-        url 'http://repository.apache.org/content/repositories/snapshots'
-    }
-}
-
-jacocoTestReport {
-    dependsOn test
-    reports {
-        xml.enabled false
-        csv.enabled false
-        html.destination "${buildDir}/jacocoHtml"
-    }
-}
-
-test {
-    reports {
-        junitXml.enabled = true
-        html.enabled = true
-    }
-}
-
-dependencies {
-    compile 'com.datastax.cassandra:cassandra-driver-core:2.2.0-rc3'
-    compile 'org.apache.curator:curator-recipes:2.7.1'
-    compile 'com.codahale.metrics:metrics-core:3.0.2'
-    compile 'com.codahale.metrics:metrics-healthchecks:3.0.2'
-    compile 'com.github.lukaszbudnik.guice-properties-el:guice-properties-el:1.0.0'
-    compile 'commons-io:commons-io:2.4'
-
-    testCompile 'junit:junit:4.12'
-    testCompile 'com.github.lukaszbudnik.cloudtag:cloudtag:1.1'
-    testCompile 'com.readytalk:metrics3-statsd:4.1.0'
-}
-
-license {
-    header project.file('HEADER')
-
-    ext.year = Calendar.getInstance().get(Calendar.YEAR)
-    ext.name = 'Łukasz Budnik'
-    ext.email = 'lukasz.budnik@gmail.com'
-}
-
-task sourcesJar(type: Jar) {
-    classifier = 'sources'
-    from sourceSets.main.allSource
-}
-
-task testJar(type: Jar) {
-    classifier = 'tests'
-    from sourceSets.test.allSource
-}
-
-task javadocJar(type: Jar) {
-    classifier = 'javadoc'
-    from javadoc
-}
-
-task printTestErrors {
-    if (System.getenv().containsKey("TRAVIS")) {
-        def xmlReports = new File("${buildDir}/test-results")
-        if (xmlReports.exists()) {
-            xmlReports.eachFileMatch(groovy.io.FileType.FILES, ~/TEST\-.*\.xml/) {
-                def testsuite = new groovy.util.XmlParser().parse(it)
-                testsuite.testcase.findAll {
-                    it.failure.size() > 0
-                }.each {
-                    println it
-                }
-            }
-        }
-    }
-}
-
-artifacts {
-    archives javadocJar, sourcesJar, testJar
-}
-
-signing {
-    required { gradle.taskGraph.hasTask("uploadArchives") }
-    sign configurations.archives
-}
-
-def deployUsername = hasProperty('ossrhUsername') ? ossrhUsername : System.getenv('DEPLOY_USERNAME')
-
-def deployPassword = hasProperty('ossrhPassword') ? ossrhPassword : System.getenv('DEPLOY_PASSWORD')
-
-
-uploadArchives {
     repositories {
-        mavenDeployer {
-            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+        mavenCentral()
 
-            repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
-                authentication(userName: deployUsername, password: deployPassword)
-            }
+        jcenter()
 
-            snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
-                authentication(userName: deployUsername, password: deployPassword)
-            }
+        maven {
+            url 'http://repository.apache.org/content/repositories/snapshots'
+        }
+    }
 
-            pom.project {
-                name 'gugis'
-                packaging 'jar'
-                // optionally artifactId can be defined here
-                description 'dqueue - distributed queue on top of Cassandra and Zookeeper.'
-                url 'https://github.com/lukaszbudnik/dqueue'
+    jacocoTestReport {
+        dependsOn test
+        reports {
+            xml.enabled false
+            csv.enabled false
+            html.destination "${buildDir}/jacocoHtml"
+        }
+    }
 
-                scm {
-                    connection 'scm:git:git@github.com:lukaszbudnik/dqueue.git'
-                    developerConnection 'scm:git:git@github.com:lukaszbudnik/dqueue.git'
-                    url 'git@github.com:lukaszbudnik/dqueue.git'
-                }
+    test {
+        reports {
+            junitXml.enabled = true
+            html.enabled = true
+        }
+    }
 
-                licenses {
-                    license {
-                        name 'The Apache License, Version 2.0'
-                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                    }
-                }
+    tasks.withType(Test) {
+        testLogging {
+            events 'failed', 'passed', 'skipped'
+        }
+    }
 
-                developers {
-                    developer {
-                        id 'lukaszbudnik'
-                        name 'Łukasz Budnik'
-                        email 'lukasz.budnik@gmail.com'
+    ext.configureLicenses = {
+        license {
+            header rootProject.file('HEADER')
+
+            ext.year = Calendar.getInstance().get(Calendar.YEAR)
+            ext.name = 'Łukasz Budnik'
+            ext.email = 'lukasz.budnik@gmail.com'
+        }
+    }
+
+    task sourcesJar(type: Jar) {
+        classifier = 'sources'
+        from sourceSets.main.allSource
+    }
+
+    task testJar(type: Jar) {
+        classifier = 'tests'
+        from sourceSets.test.allSource
+    }
+
+    task javadocJar(type: Jar) {
+        classifier = 'javadoc'
+        from javadoc
+    }
+
+    task printTestErrors {
+        if (System.getenv().containsKey("TRAVIS")) {
+            def xmlReports = new File("${buildDir}/test-results")
+            if (xmlReports.exists()) {
+                xmlReports.eachFileMatch(groovy.io.FileType.FILES, ~/TEST\-.*\.xml/) {
+                    def testsuite = new groovy.util.XmlParser().parse(it)
+                    testsuite.testcase.findAll {
+                        it.failure.size() > 0
+                    }.each {
+                        println it
                     }
                 }
             }
         }
+    }
+
+    artifacts {
+        archives javadocJar, sourcesJar, testJar
+    }
+
+    ext.deployUsername = {
+        rootProject.hasProperty('ossrhUsername') ? ossrhUsername : System.getenv('DEPLOY_USERNAME')
+    }
+
+    ext.deployPassword = {
+        rootProject.hasProperty('ossrhPassword') ? ossrhPassword : System.getenv('DEPLOY_PASSWORD')
+    }
+
+    signing {
+        required { gradle.taskGraph.hasTask("uploadArchives") }
+        sign configurations.archives
+    }
+
+}
+
+project(':dqueue-jaxrs') {
+    dependencies {
+        compile project(':dqueue')
     }
 }

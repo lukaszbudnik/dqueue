@@ -1,0 +1,6 @@
+---
+dqueue.properties:
+    - /dqueue.properties
+    - /cloudtag.properties
+dqueue.env: dev
+...

@@ -1,0 +1,74 @@
+
+plugins {
+    id 'com.github.hierynomus.license' version '0.11.0'
+    id 'application'
+}
+
+archivesBaseName = 'dqueue-jaxrs'
+
+dependencies {
+    compile 'io.dropwizard:dropwizard-core:0.8.1'
+    compile 'io.dropwizard:dropwizard-assets:0.8.1'
+    compile 'org.glassfish.jersey.media:jersey-media-multipart:2.17'
+    compile 'com.github.lukaszbudnik.cloudtag:cloudtag:1.1'
+    compile 'com.github.lukaszbudnik.guice-properties-el:guice-properties-el:1.1.0'
+
+    testCompile 'junit:junit:4.12'
+    testCompile 'org.mockito:mockito-all:1.10.19'
+}
+
+configureLicenses()
+
+license {
+    exclude('*/node-uuid-*.js')
+}
+
+mainClassName = 'com.github.lukaszbudnik.dqueue.jaxrs.core.QueueApplication'
+
+run {
+    args 'server', 'src/main/resources/dqueue.yml'
+}
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+            repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+                authentication(userName: deployUsername(), password: deployPassword())
+            }
+
+            snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
+                authentication(userName: deployUsername(), password: deployPassword())
+            }
+
+            pom.project {
+                name 'dqueue-jaxrs'
+                packaging 'jar'
+                description 'dqueue-jaxrs - JAX-RS frontend to dqueue - distributed queue implemented on top of Cassandra and Zookeeper.'
+                url 'https://github.com/lukaszbudnik/dqueue'
+
+                scm {
+                    connection 'scm:git:git@github.com:lukaszbudnik/dqueue.git'
+                    developerConnection 'scm:git:git@github.com:lukaszbudnik/dqueue.git'
+                    url 'git@github.com:lukaszbudnik/dqueue.git'
+                }
+
+                licenses {
+                    license {
+                        name 'The Apache License, Version 2.0'
+                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id 'lukaszbudnik'
+                        name 'Łukasz Budnik'
+                        email 'lukasz.budnik@gmail.com'
+                    }
+                }
+            }
+        }
+    }
+}
