@@ -20,7 +20,7 @@ dependencies {
 configureLicenses()
 
 license {
-    exclude('node-uuid-*.js')
+    exclude('*/node-uuid-*.js')
 }
 
 mainClassName = 'com.github.lukaszbudnik.dqueue.jaxrs.core.QueueApplication'
