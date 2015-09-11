@@ -15,6 +15,7 @@ import com.codahale.metrics.health.HealthCheck;
 import com.codahale.metrics.health.HealthCheckRegistry;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.utils.UUIDs;
+import com.datastax.driver.core.utils.UUIDsTesting;
 import com.github.lukaszbudnik.cloudtag.CloudTagEnsembleProvider;
 import com.github.lukaszbudnik.gpe.PropertiesElResolverModule;
 import com.google.common.collect.ImmutableMap;
@@ -208,5 +209,21 @@ public class QueueClientIntegrationTest {
         Optional<Item> item3 = itemFuture3.get();
         UUID consumedStartTime3 = item3.get().getStartTime();
         assertEquals(startTime3, consumedStartTime3);
+    }
+
+    @Test
+    public void shouldHandlePreviousDay() throws ExecutionException, InterruptedException {
+        long yesterdayTimestamp = System.currentTimeMillis() - 24 * 60 * 60 * 1_000;
+
+        UUID yesterdayUUID = UUIDsTesting.timeBased(yesterdayTimestamp);
+
+        Future<UUID> published = queueClient.publish(new Item(yesterdayUUID, ByteBuffer.wrap("".getBytes())));
+        published.get();
+
+        Future<Optional<Item>> itemFuture = queueClient.consume();
+        Optional<Item> itemOptional = itemFuture.get();
+        Item item = itemOptional.get();
+
+        assertEquals(yesterdayUUID, item.getStartTime());
     }
 }
