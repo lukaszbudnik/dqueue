@@ -91,7 +91,7 @@ public class QueueService {
                 }
             };
 
-            return Response.ok(streamingOutput).header("X-Dqueue-Start-Time", UUID.randomUUID().toString()).build();
+            return Response.ok(streamingOutput).header("X-Dqueue-Start-Time", i.getStartTime().toString()).build();
         }).orElseGet(() -> Response.noContent().build());
 
         return response;

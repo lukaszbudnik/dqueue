@@ -40,4 +40,35 @@ public class Item {
     public Map<String, ?> getFilters() {
         return filters;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Item item = (Item) o;
+
+        if (!startTime.equals(item.startTime)) return false;
+        if (!filters.equals(item.filters)) return false;
+        if (!contents.equals(item.contents)) return false;
+
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = startTime.hashCode();
+        result = 31 * result + contents.hashCode();
+        result = 31 * result + filters.hashCode();
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        return "Item{" +
+                "startTime=" + startTime +
+                ", filters=" + filters +
+                ", contents=" + contents +
+                '}';
+    }
 }

@@ -265,13 +265,16 @@ public class QueueClientImpl implements QueueClient {
     }
 
     private Select.Where buildSelect(String tableName, Map<String, ?> filters) {
+        long nowTimestamp = System.currentTimeMillis();
+        long yesterdayTimestamp = nowTimestamp - 24 * 60 * 60 * 1_000;
         DateFormat df = new SimpleDateFormat("yyyy-MM-dd");
-        String key = df.format(new Date());
+        String nowKey = df.format(new Date(nowTimestamp));
+        String yesterdayKey = df.format(new Date(yesterdayTimestamp));
 
         QueryBuilder queryBuilder = new QueryBuilder(session.getCluster());
         Select.Where select = queryBuilder.select().column("start_time").column("contents")
                 .from(cassandraKeyspace, tableName)
-                .where(QueryBuilder.eq("key", key));
+                .where(QueryBuilder.in("key", nowKey, yesterdayKey));
 
         if (filters != null && filters.size() > 0) {
             for (String filter : filters.keySet()) {
