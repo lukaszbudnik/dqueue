@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2015 Łukasz Budnik <lukasz.budnik@gmail.com>
+ * Copyright (C) 2016 Łukasz Budnik <lukasz.budnik@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
  *
@@ -131,7 +131,7 @@ public class QueueClientImpl implements QueueClient {
         try {
             function.apply();
         } catch (Exception e) {
-            throw new RuntimeException();
+            throw new RuntimeException(e);
         } finally {
             timer.ifPresent(Timer.Context::stop);
         }

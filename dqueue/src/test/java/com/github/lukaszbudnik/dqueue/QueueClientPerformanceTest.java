@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2015 Łukasz Budnik <lukasz.budnik@gmail.com>
+ * Copyright (C) 2016 Łukasz Budnik <lukasz.budnik@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
  *
@@ -168,14 +168,14 @@ public class QueueClientPerformanceTest {
             UUID startTime = UUIDs.timeBased();
             Future<UUID> id = queueClient.publish(new Item(startTime, buffer, filters));
             try {
-                id.get();
+                Assert.assertEquals(startTime, id.get());
             } catch (Exception e) {
                 fail(e.getMessage());
             }
         });
 
         IntStream.range(0, NUMBER_OF_ITERATIONS).forEach((i) -> {
-            Future<Optional<Item>> itemFuture = queueClient.consume();
+            Future<Optional<Item>> itemFuture = queueClient.consume(filters);
 
             Optional<Item> item = null;
             try {

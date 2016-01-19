@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2015 Łukasz Budnik <lukasz.budnik@gmail.com>
+ * Copyright (C) 2016 Łukasz Budnik <lukasz.budnik@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
  *
@@ -26,10 +26,15 @@ import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
-import org.junit.*;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Optional;
 import java.util.SortedMap;
 import java.util.UUID;
@@ -157,6 +162,59 @@ public class SequentialQueueClientIntegrationTest {
         queueClient.delete(itemC);
 
         Future<Optional<SequentialItem>> empty = queueClient.consumeSequential(ImmutableMap.of());
+        assertFalse(empty.get().isPresent());
+    }
+
+    @Test
+    public void shouldPublishSequentialWithFilters() throws ExecutionException, InterruptedException {
+
+        Map<String, String> filters = ImmutableMap.of("filter1", "1", "filter2", "two");
+
+        Future<ImmutableList<UUID>> futures = queueClient.publishSequential(
+                new Item(UUIDs.timeBased(), ByteBuffer.wrap("A".getBytes()), filters),
+                new Item(UUIDs.timeBased(), ByteBuffer.wrap("B".getBytes()), filters),
+                new Item(UUIDs.timeBased(), ByteBuffer.wrap("C".getBytes()), filters)
+        );
+        futures.get();
+
+        Future<Optional<SequentialItem>> optionalFutureA = queueClient.consumeSequential(filters);
+        Optional<SequentialItem> itemOptionalA = optionalFutureA.get();
+        SequentialItem itemA = itemOptionalA.get();
+
+        assertNotNull(itemA);
+        assertEquals("A", new String(itemA.getContents().array()));
+
+        Future<Optional<SequentialItem>> optionalFutureB = queueClient.consumeSequential(filters);
+        Optional<SequentialItem> itemOptionalB = optionalFutureB.get();
+
+        assertFalse(itemOptionalB.isPresent());
+
+        queueClient.delete(itemA);
+
+        optionalFutureB = queueClient.consumeSequential(filters);
+        itemOptionalB = optionalFutureB.get();
+        SequentialItem itemB = itemOptionalB.get();
+
+        assertNotNull(itemB);
+        assertEquals("B", new String(itemB.getContents().array()));
+
+        Future<Optional<SequentialItem>> optionalFutureC = queueClient.consumeSequential(filters);
+        Optional<SequentialItem> itemOptionalC = optionalFutureC.get();
+
+        assertFalse(itemOptionalC.isPresent());
+
+        queueClient.delete(itemB);
+
+        optionalFutureC = queueClient.consumeSequential(filters);
+        itemOptionalC = optionalFutureC.get();
+        SequentialItem itemC = itemOptionalC.get();
+
+        assertNotNull(itemC);
+        assertEquals("C", new String(itemC.getContents().array()));
+
+        queueClient.delete(itemC);
+
+        Future<Optional<SequentialItem>> empty = queueClient.consumeSequential(filters);
         assertFalse(empty.get().isPresent());
     }
 
