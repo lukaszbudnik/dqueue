@@ -124,35 +124,35 @@ public class SequentialQueueClientIntegrationTest {
         );
         futures.get();
 
-        Future<Optional<SequentialItem>> optionalFutureA = queueClient.consumeSequential(ImmutableMap.of());
+        Future<Optional<SequentialItem>> optionalFutureA = queueClient.consumeSequential();
         Optional<SequentialItem> itemOptionalA = optionalFutureA.get();
         SequentialItem itemA = itemOptionalA.get();
 
         assertNotNull(itemA);
         assertEquals("A", new String(itemA.getContents().array()));
 
-        Future<Optional<SequentialItem>> optionalFutureB = queueClient.consumeSequential(ImmutableMap.of());
+        Future<Optional<SequentialItem>> optionalFutureB = queueClient.consumeSequential();
         Optional<SequentialItem> itemOptionalB = optionalFutureB.get();
 
         assertFalse(itemOptionalB.isPresent());
 
         queueClient.delete(itemA);
 
-        optionalFutureB = queueClient.consumeSequential(ImmutableMap.of());
+        optionalFutureB = queueClient.consumeSequential();
         itemOptionalB = optionalFutureB.get();
         SequentialItem itemB = itemOptionalB.get();
 
         assertNotNull(itemB);
         assertEquals("B", new String(itemB.getContents().array()));
 
-        Future<Optional<SequentialItem>> optionalFutureC = queueClient.consumeSequential(ImmutableMap.of());
+        Future<Optional<SequentialItem>> optionalFutureC = queueClient.consumeSequential();
         Optional<SequentialItem> itemOptionalC = optionalFutureC.get();
 
         assertFalse(itemOptionalC.isPresent());
 
         queueClient.delete(itemB);
 
-        optionalFutureC = queueClient.consumeSequential(ImmutableMap.of());
+        optionalFutureC = queueClient.consumeSequential();
         itemOptionalC = optionalFutureC.get();
         SequentialItem itemC = itemOptionalC.get();
 
@@ -161,7 +161,7 @@ public class SequentialQueueClientIntegrationTest {
 
         queueClient.delete(itemC);
 
-        Future<Optional<SequentialItem>> empty = queueClient.consumeSequential(ImmutableMap.of());
+        Future<Optional<SequentialItem>> empty = queueClient.consumeSequential();
         assertFalse(empty.get().isPresent());
     }
 

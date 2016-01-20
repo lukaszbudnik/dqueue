@@ -9,6 +9,8 @@
  */
 package com.github.lukaszbudnik.dqueue;
 
+import com.google.common.collect.ImmutableMap;
+
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,8 +20,10 @@ public interface QueueClient extends AutoCloseable {
 
     Future<UUID> publish(Item item);
 
-    Future<Optional<Item>> consume();
-
     Future<Optional<Item>> consume(Map<String, ?> filters);
+
+    default Future<Optional<Item>> consume() {
+        return consume(ImmutableMap.of());
+    }
 
 }

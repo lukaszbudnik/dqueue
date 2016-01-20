@@ -12,21 +12,28 @@ package com.github.lukaszbudnik.dqueue;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.codahale.metrics.health.HealthCheckRegistry;
-import com.datastax.driver.core.*;
+import com.datastax.driver.core.CodecRegistry;
+import com.datastax.driver.core.DataType;
+import com.datastax.driver.core.ResultSet;
+import com.datastax.driver.core.Row;
+import com.datastax.driver.core.TypeCodec;
 import com.datastax.driver.core.querybuilder.Delete;
 import com.datastax.driver.core.querybuilder.Insert;
 import com.datastax.driver.core.querybuilder.QueryBuilder;
 import com.datastax.driver.core.querybuilder.Select;
 import com.datastax.driver.core.utils.UUIDs;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 
 import java.nio.ByteBuffer;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.Future;
 
 public class SequentialQueueClientImpl extends QueueClientImpl implements SequentialQueueClient {
@@ -40,14 +47,13 @@ public class SequentialQueueClientImpl extends QueueClientImpl implements Sequen
     }
 
     @Override
-    public Future<ImmutableList<UUID>> publishSequential(Item... items) {
+    public Future<ImmutableList<UUID>> publishSequential(List<Item> items) {
 
         Future<ImmutableList<UUID>> publishResult = executorService.submit(() -> {
             UUID dependency = zeroUUID;
             ImmutableList.Builder<UUID> uuids = ImmutableList.builder();
 
-            for (int i = 0; i < items.length; i++) {
-                Item item = items[i];
+            for (Item item: items) {
                 String filterNames;
                 if (item.getFilters().isEmpty()) {
                     filterNames = NO_FILTERS;
@@ -115,11 +121,6 @@ public class SequentialQueueClientImpl extends QueueClientImpl implements Sequen
         }
 
         return insert;
-    }
-
-    @Override
-    public Future<Optional<SequentialItem>> consumeSequential() {
-        return consumeSequential(ImmutableMap.of());
     }
 
     @Override
