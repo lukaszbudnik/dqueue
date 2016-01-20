@@ -9,21 +9,29 @@
  */
 package com.github.lukaszbudnik.dqueue;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Future;
 
-public interface QueueClient extends AutoCloseable {
+public interface SequentialQueueClient extends AutoCloseable {
 
-    Future<UUID> publish(Item item);
+    Future<ImmutableList<UUID>> publishSequential(List<Item> items);
 
-    Future<Optional<Item>> consume(Map<String, ?> filters);
-
-    default Future<Optional<Item>> consume() {
-        return consume(ImmutableMap.of());
+    default Future<ImmutableList<UUID>> publishSequential(Item... items) {
+        return publishSequential(Arrays.asList(items));
     }
 
+    Future<Optional<SequentialItem>> consumeSequential(Map<String, String> filters);
+
+    default Future<Optional<SequentialItem>> consumeSequential() {
+        return consumeSequential(ImmutableMap.of());
+    }
+
+    void delete(SequentialItem item);
 }

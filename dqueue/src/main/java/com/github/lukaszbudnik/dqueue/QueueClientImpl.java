@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2015 Łukasz Budnik <lukasz.budnik@gmail.com>
+ * Copyright (C) 2015-2016 Łukasz Budnik <lukasz.budnik@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
  *
@@ -21,6 +21,8 @@ import com.datastax.driver.core.querybuilder.Select;
 import com.datastax.driver.core.utils.UUIDs;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.util.concurrent.ListeningExecutorService;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.commons.io.IOUtils;
 import org.apache.curator.framework.CuratorFramework;
@@ -30,7 +32,6 @@ import java.nio.ByteBuffer;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
@@ -38,26 +39,27 @@ import java.util.concurrent.ThreadFactory;
 public class QueueClientImpl implements QueueClient {
 
     public static final String NO_FILTERS = "no_filters";
-    private final int cassandraPort;
-    private final String[] cassandraAddress;
-    private final String cassandraKeyspace;
-    private final String cassandraTablePrefix;
-    private final boolean cassandraCreateTables;
-    private final Cache<String, Boolean> cacheCreatedTables;
+
+    protected final int cassandraPort;
+    protected final String[] cassandraAddress;
+    protected final String cassandraKeyspace;
+    protected final String cassandraTablePrefix;
+    protected final boolean cassandraCreateTables;
+    protected final Cache<String, Boolean> cacheCreatedTables;
 
     // cassandra
-    private final Cluster cluster;
-    private final Session session;
+    protected final Cluster cluster;
+    protected final Session session;
 
     // zookeeper
-    private final CuratorFramework zookeeperClient;
+    protected final CuratorFramework zookeeperClient;
 
     // codahale
-    private final MetricRegistry metricRegistry;
-    private final HealthCheckRegistry healthCheckRegistry;
+    protected final MetricRegistry metricRegistry;
+    protected final HealthCheckRegistry healthCheckRegistry;
 
-    private final ThreadFactory threadFactory;
-    private final ExecutorService executorService;
+    protected final ThreadFactory threadFactory;
+    protected final ListeningExecutorService executorService;
 
     QueueClientImpl(int cassandraPort, String[] cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient, int threadPoolSize, MetricRegistry metricRegistry, HealthCheckRegistry healthCheckRegistry) throws Exception {
         this.cassandraPort = cassandraPort;
@@ -106,14 +108,14 @@ public class QueueClientImpl implements QueueClient {
 
         threadFactory = new ThreadFactoryBuilder().setNameFormat("dqueue-thread-%d").build();
 
-        executorService = Executors.newFixedThreadPool(threadPoolSize, threadFactory);
+        executorService = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(threadPoolSize, threadFactory));
     }
 
     Session getSession() {
         return session;
     }
 
-    private <R> R executeAndMeasureTime(NoArgFunction<R> function, String metricName) {
+    protected <R> R executeAndMeasureTime(NoArgFunction<R> function, String metricName) {
         Optional<Timer.Context> timer = Optional.ofNullable(metricRegistry).map(m -> m.timer(metricName).time());
         try {
             return function.apply();
@@ -124,12 +126,12 @@ public class QueueClientImpl implements QueueClient {
         }
     }
 
-    private void executeAndMeasureTime(NoArgVoidFunction function, String metricName) {
+    protected void executeAndMeasureTime(NoArgVoidFunction function, String metricName) {
         Optional<Timer.Context> timer = Optional.ofNullable(metricRegistry).map(m -> m.timer(metricName).time());
         try {
             function.apply();
         } catch (Exception e) {
-            throw new RuntimeException();
+            throw new RuntimeException(e);
         } finally {
             timer.ifPresent(Timer.Context::stop);
         }
@@ -184,11 +186,6 @@ public class QueueClientImpl implements QueueClient {
         });
 
         return publishResult;
-    }
-
-    @Override
-    public Future<Optional<Item>> consume() {
-        return consume(Collections.emptyMap());
     }
 
     @Override
