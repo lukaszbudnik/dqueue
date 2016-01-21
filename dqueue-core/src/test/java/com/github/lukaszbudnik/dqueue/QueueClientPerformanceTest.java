@@ -38,7 +38,7 @@ import static org.junit.Assert.fail;
 
 public class QueueClientPerformanceTest {
 
-    private static final int NUMBER_OF_ITERATIONS = 10_000;
+    private static final int NUMBER_OF_ITERATIONS = 10_0;
     private static Injector injector;
     private static CuratorFramework zookeeperClient;
 

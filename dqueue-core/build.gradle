@@ -3,7 +3,7 @@ plugins {
     id 'com.github.hierynomus.license' version '0.11.0'
 }
 
-archivesBaseName = 'dqueue'
+archivesBaseName = 'dqueue-core'
 
 dependencies {
     compile 'com.datastax.cassandra:cassandra-driver-core:2.2.0-rc3'
@@ -34,7 +34,7 @@ uploadArchives {
             }
 
             pom.project {
-                name 'dqueue'
+                name 'dqueue-core'
                 packaging 'jar'
                 // optionally artifactId can be defined here
                 description 'dqueue - distributed queue on top of Cassandra and Zookeeper.'
