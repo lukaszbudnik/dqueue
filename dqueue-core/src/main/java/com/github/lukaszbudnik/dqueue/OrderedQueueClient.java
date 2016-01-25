@@ -51,7 +51,7 @@ public interface OrderedQueueClient extends QueueClient {
      */
     Future<UUID> publishOrdered(OrderedItem orderedItem);
 
-    Future<Optional<OrderedItem>> consumeOrdered(Map<String, String> filters);
+    Future<Optional<OrderedItem>> consumeOrdered(Map<String, ?> filters);
 
     default Future<Optional<OrderedItem>> consumeOrdered() {
         return consumeOrdered(ImmutableMap.of());
@@ -61,5 +61,5 @@ public interface OrderedQueueClient extends QueueClient {
         deleteOrdered(item.getStartTime(), item.getFilters());
     }
 
-    void deleteOrdered(UUID startTime, Map<String, String> filters);
+    void deleteOrdered(UUID startTime, Map<String, ?> filters);
 }

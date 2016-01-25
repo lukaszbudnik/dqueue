@@ -52,7 +52,7 @@ public class QueueServiceTest {
     public static final QueueService queueService = new QueueService(queueClient);
     public static final Item item = new Item(UUIDs.timeBased(), ByteBuffer.wrap("test".getBytes()));
     public static final OrderedItem orderedItem = new OrderedItem(item.getStartTime(), OrderedQueueClient.zeroUUID, item.getContents());
-    public static final Map<String, String> filters = ImmutableMap.of("kkk", "vvv", "qqq", "www");
+    public static final Map<String, Object> filters = ImmutableMap.of("kkk", "vvv", "qqq", "www");
     public static final Item itemWithFilters = new Item(UUIDs.timeBased(), item.getContents(), filters);
     public static final OrderedItem orderedItemWithFilters = new OrderedItem(UUIDs.timeBased(), orderedItem.getDependency(), orderedItem.getContents(), filters);
 
@@ -122,7 +122,7 @@ public class QueueServiceTest {
         Entity entity = Entity.entity(multiPart, MediaType.MULTIPART_FORM_DATA_TYPE);
 
         Response publishResponse = resources.client().register(MultiPartFeature.class)
-                .target("/dqueue/v1/publishOrdered").request().buildPost(entity).invoke();
+                .target("/dqueue/v1/ordered/publish").request().buildPost(entity).invoke();
 
         assertThat(publishResponse.getStatus(), equalTo(Response.Status.ACCEPTED.getStatusCode()));
 
@@ -141,7 +141,7 @@ public class QueueServiceTest {
         Entity entity = Entity.entity(multiPart, MediaType.MULTIPART_FORM_DATA_TYPE);
 
         Response publishResponse = resources.client().register(MultiPartFeature.class)
-                .target("/dqueue/v1/publishOrdered/kkk/vvv/qqq/www").request().buildPost(entity).invoke();
+                .target("/dqueue/v1/ordered/publish/kkk/vvv/qqq/www").request().buildPost(entity).invoke();
 
         assertThat(publishResponse.getStatus(), equalTo(Response.Status.ACCEPTED.getStatusCode()));
 
@@ -205,7 +205,7 @@ public class QueueServiceTest {
 
     @Test
     public void shouldConsumeOrderedWithoutFilters() throws IllegalAccessException, IOException {
-        Response response = resources.getJerseyTest().client().target("/dqueue/v1/consumeOrdered").request()
+        Response response = resources.getJerseyTest().client().target("/dqueue/v1/ordered/consume").request()
                 .accept(MediaType.APPLICATION_OCTET_STREAM_TYPE)
                 .get();
 
@@ -226,7 +226,7 @@ public class QueueServiceTest {
 
     @Test
     public void shouldConsumeOrderedWithFilters() throws IllegalAccessException, IOException {
-        Response response = resources.getJerseyTest().client().target("/dqueue/v1/consumeOrdered/kkk/vvv/qqq/www").request()
+        Response response = resources.getJerseyTest().client().target("/dqueue/v1/ordered/consume/kkk/vvv/qqq/www").request()
                 .accept(MediaType.APPLICATION_OCTET_STREAM_TYPE)
                 .get();
 
@@ -258,7 +258,7 @@ public class QueueServiceTest {
 
     @Test
     public void shouldDeleteOrderedWithoutFilters() throws IllegalAccessException, IOException {
-        Response response = resources.getJerseyTest().client().target("/dqueue/v1/deleteOrdered/" + orderedItem.getStartTime()).request()
+        Response response = resources.getJerseyTest().client().target("/dqueue/v1/ordered/delete/" + orderedItem.getStartTime()).request()
                 .delete();
 
         assertThat(response.getStatus(), equalTo(Response.Status.ACCEPTED.getStatusCode()));
@@ -268,7 +268,7 @@ public class QueueServiceTest {
 
     @Test
     public void shouldDeleteOrderedWithFilters() throws IllegalAccessException, IOException {
-        Response response = resources.getJerseyTest().client().target("/dqueue/v1/deleteOrdered/" + orderedItemWithFilters.getStartTime() + "/kkk/vvv/qqq/www").request()
+        Response response = resources.getJerseyTest().client().target("/dqueue/v1/ordered/delete/" + orderedItemWithFilters.getStartTime() + "/kkk/vvv/qqq/www").request()
                 .delete();
 
         assertThat(response.getStatus(), equalTo(Response.Status.ACCEPTED.getStatusCode()));
@@ -281,7 +281,7 @@ public class QueueServiceTest {
 
         thrown.expect(new NotPairedPathSegments());
 
-        resources.getJerseyTest().client().target("/dqueue/v1/deleteOrdered/" + item.getStartTime() + "/kkk").request()
+        resources.getJerseyTest().client().target("/dqueue/v1/ordered/delete/" + item.getStartTime() + "/kkk").request()
                 .delete();
     }
 

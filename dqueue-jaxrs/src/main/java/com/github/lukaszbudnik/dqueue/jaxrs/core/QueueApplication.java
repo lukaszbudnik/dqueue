@@ -48,7 +48,7 @@ public class QueueApplication extends Application<QueueConfiguration> {
         queueClientBuilder.withMetricRegistry(environment.metrics());
         queueClientBuilder.withHealthMetricRegistry(environment.healthChecks());
 
-        OrderedQueueClient queueClient = queueClientBuilder.buildSequential();
+        OrderedQueueClient queueClient = queueClientBuilder.buildOrdered();
 
         environment.jersey().register(new QueueService(queueClient));
         environment.jersey().register(MultiPartFeature.class);

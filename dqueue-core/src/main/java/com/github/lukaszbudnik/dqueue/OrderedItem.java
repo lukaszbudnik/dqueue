@@ -22,7 +22,7 @@ public class OrderedItem extends Item {
         this(startTime, dependency, contents, ImmutableMap.of());
     }
 
-    public OrderedItem(UUID startTime, UUID dependency, ByteBuffer contents, Map<String, String> filters) {
+    public OrderedItem(UUID startTime, UUID dependency, ByteBuffer contents, Map<String, ?> filters) {
         super(startTime, contents, filters);
         this.dependency = dependency;
     }

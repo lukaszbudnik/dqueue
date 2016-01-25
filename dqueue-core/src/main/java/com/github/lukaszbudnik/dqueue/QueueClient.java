@@ -20,7 +20,7 @@ public interface QueueClient extends AutoCloseable {
 
     Future<UUID> publish(Item item);
 
-    Future<Optional<Item>> consume(Map<String, String> filters);
+    Future<Optional<Item>> consume(Map<String, ?> filters);
 
     default Future<Optional<Item>> consume() {
         return consume(ImmutableMap.of());

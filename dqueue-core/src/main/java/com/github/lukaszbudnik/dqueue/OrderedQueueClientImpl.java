@@ -42,7 +42,7 @@ public class OrderedQueueClientImpl extends QueueClientImpl implements OrderedQu
     private static final int FETCHED = 1;
 
     OrderedQueueClientImpl(int cassandraPort, String[] cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient, int threadPoolSize, MetricRegistry metricRegistry, HealthCheckRegistry healthCheckRegistry) throws Exception {
-        super(cassandraPort, cassandraAddress, cassandraKeyspace, cassandraTablePrefix, cassandraCreateTables, zookeeperClient, threadPoolSize, metricRegistry, healthCheckRegistry);
+        super(cassandraPort, cassandraAddress, cassandraKeyspace, cassandraTablePrefix + "_ordered", cassandraCreateTables, zookeeperClient, threadPoolSize, metricRegistry, healthCheckRegistry);
     }
 
     @Override
@@ -95,7 +95,7 @@ public class OrderedQueueClientImpl extends QueueClientImpl implements OrderedQu
     }
 
     @Override
-    public void deleteOrdered(UUID startTime, Map<String, String> filters) {
+    public void deleteOrdered(UUID startTime, Map<String, ?> filters) {
         String filterNames;
         if (filters.isEmpty()) {
             filterNames = NO_FILTERS;
@@ -133,7 +133,7 @@ public class OrderedQueueClientImpl extends QueueClientImpl implements OrderedQu
     }
 
     @Override
-    public Future<Optional<OrderedItem>> consumeOrdered(Map<String, String> filters) {
+    public Future<Optional<OrderedItem>> consumeOrdered(Map<String, ?> filters) {
         Future<Optional<OrderedItem>> itemFuture = executorService.submit(() -> {
 
             String filterNames;
@@ -227,7 +227,7 @@ public class OrderedQueueClientImpl extends QueueClientImpl implements OrderedQu
         return delete;
     }
 
-    private Select.Where buildSequentialSelectWithoutStatus(String tableName, Map<String, String> filters) {
+    private Select.Where buildSequentialSelectWithoutStatus(String tableName, Map<String, ?> filters) {
         long nowTimestamp = System.currentTimeMillis();
         long yesterdayTimestamp = nowTimestamp - 24 * 60 * 60 * 1_000;
         DateFormat df = new SimpleDateFormat("yyyy-MM-dd");
@@ -248,14 +248,14 @@ public class OrderedQueueClientImpl extends QueueClientImpl implements OrderedQu
         return select;
     }
 
-    private Select.Where buildSequentialSelect(String tableName, Map<String, String> filters) {
+    private Select.Where buildSequentialSelect(String tableName, Map<String, ?> filters) {
         Select.Where select = buildSequentialSelectWithoutStatus(tableName, filters);
         select.and(QueryBuilder.lt("start_time", UUIDs.endOf(System.currentTimeMillis())));
 
         return select;
     }
 
-    private Select buildDependencySelectInProcessing(String tableName, UUID dependency, Map<String, String> filters) {
+    private Select buildDependencySelectInProcessing(String tableName, UUID dependency, Map<String, ?> filters) {
         Select.Where select = buildSequentialSelectWithoutStatus(tableName + "_processing", filters);
 
         select.and(QueryBuilder.eq("start_time", dependency));
@@ -263,7 +263,7 @@ public class OrderedQueueClientImpl extends QueueClientImpl implements OrderedQu
         return select.limit(1);
     }
 
-    private Select buildDependencySelectInQueued(String tableName, UUID dependency, Map<String, String> filters) {
+    private Select buildDependencySelectInQueued(String tableName, UUID dependency, Map<String, ?> filters) {
         Select.Where select = buildSequentialSelectWithoutStatus(tableName + "_queued", filters);
 
         select.and(QueryBuilder.eq("start_time", dependency));

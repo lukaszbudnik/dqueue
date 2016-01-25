@@ -111,7 +111,7 @@ public class QueueClientIntegrationTest {
 
     @Test
     public void shouldReturnNothingIfQueueIsEmpty() throws ExecutionException, InterruptedException {
-        Future<Optional<Item>> itemFuture = queueClient.consume(ImmutableMap.of("type", 123));
+        Future<Optional<Item>> itemFuture = queueClient.consume(ImmutableMap.of("type", "123"));
 
         Optional<Item> item = itemFuture.get();
 

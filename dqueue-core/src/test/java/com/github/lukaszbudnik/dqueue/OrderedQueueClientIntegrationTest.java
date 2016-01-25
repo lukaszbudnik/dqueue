@@ -80,7 +80,7 @@ public class OrderedQueueClientIntegrationTest {
                 .withZookeeperClient(zookeeperClient)
                 .withMetricRegistry(metricRegistry)
                 .withHealthMetricRegistry(healthCheckRegistry)
-                .buildSequential();
+                .buildOrdered();
 
         session = queueClient.getSession();
         session.execute("create keyspace " + cassandraKeyspace + " WITH replication = {'class':'SimpleStrategy', 'replication_factor':3}");
@@ -136,7 +136,7 @@ public class OrderedQueueClientIntegrationTest {
 
         assertFalse(itemOptionalB.isPresent());
 
-        queueClient.delete(itemA);
+        queueClient.deleteOrdered(itemA);
 
         optionalFutureB = queueClient.consumeOrdered();
         itemOptionalB = optionalFutureB.get();
@@ -150,7 +150,7 @@ public class OrderedQueueClientIntegrationTest {
 
         assertFalse(itemOptionalC.isPresent());
 
-        queueClient.delete(itemB);
+        queueClient.deleteOrdered(itemB);
 
         optionalFutureC = queueClient.consumeOrdered();
         itemOptionalC = optionalFutureC.get();
@@ -159,7 +159,7 @@ public class OrderedQueueClientIntegrationTest {
         assertNotNull(itemC);
         assertEquals("C", new String(itemC.getContents().array()));
 
-        queueClient.delete(itemC);
+        queueClient.deleteOrdered(itemC);
 
         Future<Optional<OrderedItem>> empty = queueClient.consumeOrdered();
         assertFalse(empty.get().isPresent());
@@ -189,7 +189,7 @@ public class OrderedQueueClientIntegrationTest {
 
         assertFalse(itemOptionalB.isPresent());
 
-        queueClient.delete(itemA);
+        queueClient.deleteOrdered(itemA);
 
         optionalFutureB = queueClient.consumeOrdered(filters);
         itemOptionalB = optionalFutureB.get();
@@ -203,7 +203,7 @@ public class OrderedQueueClientIntegrationTest {
 
         assertFalse(itemOptionalC.isPresent());
 
-        queueClient.delete(itemB);
+        queueClient.deleteOrdered(itemB);
 
         optionalFutureC = queueClient.consumeOrdered(filters);
         itemOptionalC = optionalFutureC.get();
@@ -212,7 +212,7 @@ public class OrderedQueueClientIntegrationTest {
         assertNotNull(itemC);
         assertEquals("C", new String(itemC.getContents().array()));
 
-        queueClient.delete(itemC);
+        queueClient.deleteOrdered(itemC);
 
         Future<Optional<OrderedItem>> empty = queueClient.consumeOrdered(filters);
         assertFalse(empty.get().isPresent());

@@ -189,7 +189,7 @@ public class QueueClientImpl implements QueueClient {
     }
 
     @Override
-    public Future<Optional<Item>> consume(Map<String, String> filters) {
+    public Future<Optional<Item>> consume(Map<String, ?> filters) {
         if (filters == null) {
             throw new IllegalArgumentException("Filters cannot be null, if no filters are to be used pass an empty map");
         }
