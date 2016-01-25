@@ -19,23 +19,23 @@ dqueue.publish = function() {
         url += '/ordered'
         fd.append('dependency', dependency)
     }
-
-    url += '/publish'
-
-
+    fd.append('startTime', $('#startTime').val())
     $.each($('#contents'), function(i, obj) {
         fd.append('contents', obj.files[0])
     })
-    fd.append('startTime', $('#startTime').val())
+
+    url += '/publish'
 
     var filters = $('#filters').val().trim()
+    var filtersHeader = null
     if (filters.length > 0) {
-        url += '/' + filters
+        filtersHeader = { 'X-Dqueue-Filters': filters }
     }
 
     $.ajax({
       url: url,
       data: fd,
+      headers: filtersHeader,
       processData: false,
       contentType: false,
       type: 'POST',

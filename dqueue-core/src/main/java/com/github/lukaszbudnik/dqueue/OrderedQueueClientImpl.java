@@ -42,7 +42,7 @@ public class OrderedQueueClientImpl extends QueueClientImpl implements OrderedQu
     private static final int FETCHED = 1;
 
     OrderedQueueClientImpl(int cassandraPort, String[] cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient, int threadPoolSize, MetricRegistry metricRegistry, HealthCheckRegistry healthCheckRegistry) throws Exception {
-        super(cassandraPort, cassandraAddress, cassandraKeyspace, cassandraTablePrefix + "_ordered", cassandraCreateTables, zookeeperClient, threadPoolSize, metricRegistry, healthCheckRegistry);
+        super(cassandraPort, cassandraAddress, cassandraKeyspace, cassandraTablePrefix, cassandraCreateTables, zookeeperClient, threadPoolSize, metricRegistry, healthCheckRegistry);
     }
 
     @Override
@@ -290,8 +290,8 @@ public class OrderedQueueClientImpl extends QueueClientImpl implements OrderedQu
 
             String createTableMetricName = "dqueue." + operation + "." + filterNames + ".cassandraCreateTable.timer";
             executeAndMeasureTime(() -> {
-                session.execute(createTableQueued).one();
-                session.execute(createTableProcessing).one();
+                session.execute(createTableQueued).wasApplied();
+                session.execute(createTableProcessing).wasApplied();
             }, createTableMetricName);
             cacheCreatedTables.put(filterNames, Boolean.TRUE);
         }
