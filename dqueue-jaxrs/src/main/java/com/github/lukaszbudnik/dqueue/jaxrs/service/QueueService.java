@@ -11,22 +11,25 @@ package com.github.lukaszbudnik.dqueue.jaxrs.service;
 
 import com.codahale.metrics.annotation.Timed;
 import com.github.lukaszbudnik.dqueue.Item;
-import com.github.lukaszbudnik.dqueue.QueueClient;
+import com.github.lukaszbudnik.dqueue.OrderedItem;
+import com.github.lukaszbudnik.dqueue.OrderedQueueClient;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import org.apache.commons.io.IOUtils;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataParam;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Future;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -41,9 +44,11 @@ import javax.ws.rs.core.StreamingOutput;
 @Path("/dqueue/v1")
 public class QueueService {
 
-    private final QueueClient queueClient;
+    public static final String X_DQUEUE_START_TIME_HEADER = "X-Dqueue-Start-Time";
+    public static final String X_DQUEUE_DEPENDENCY_HEADER = "X-Dqueue-Dependency";
+    private final OrderedQueueClient queueClient;
 
-    public QueueService(QueueClient queueClient) {
+    public QueueService(OrderedQueueClient queueClient) {
         this.queueClient = queueClient;
     }
 
@@ -55,7 +60,7 @@ public class QueueService {
     public Response publish(@FormDataParam("contents") InputStream contentsInputStream,
                             @FormDataParam("contents") FormDataContentDisposition contentsMetaData,
                             @FormDataParam("startTime") UUID startTime) throws Exception {
-        return publish(contentsInputStream, contentsMetaData, startTime, new ArrayList<>());
+        return publish(contentsInputStream, contentsMetaData, startTime, ImmutableList.of());
     }
 
     @POST
@@ -67,11 +72,7 @@ public class QueueService {
                          @FormDataParam("contents") FormDataContentDisposition contentsMetaData,
                          @FormDataParam("startTime") UUID startTime,
                          @PathParam("filters") List<PathSegment> filters) throws Exception {
-        Map<String, String> filtersMap = buildFilters(filters);
-        ByteBuffer byteBuffer = ByteBuffer.wrap(IOUtils.toByteArray(contentsInputStream));
-        Item item = new Item(startTime, byteBuffer, filtersMap);
-        queueClient.publish(item);
-        return Response.status(Response.Status.ACCEPTED).build();
+        return publishItem(contentsInputStream, startTime, null, filters);
     }
 
     @GET
@@ -79,7 +80,7 @@ public class QueueService {
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Timed
     public Response consume() throws Exception {
-        return consume(new ArrayList<>());
+        return consume(ImmutableList.of());
     }
 
     @GET
@@ -87,35 +88,142 @@ public class QueueService {
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Timed
     public Response consume(@PathParam("filters") List<PathSegment> filters) throws Exception {
+        return consumeItem(filters, false);
+    }
 
+    @POST
+    @Path("/ordered/publish")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_JSON)
+    @Timed
+    public Response publishOrdered(@FormDataParam("contents") InputStream contentsInputStream,
+                                   @FormDataParam("contents") FormDataContentDisposition contentsMetaData,
+                                   @FormDataParam("startTime") UUID startTime,
+                                   @FormDataParam("dependency") UUID dependency) throws Exception {
+        return publishOrdered(contentsInputStream, contentsMetaData, startTime, dependency, ImmutableList.of());
+    }
+
+    @POST
+    @Path("/ordered/publish/{filters:.*}")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_JSON)
+    @Timed
+    public Response publishOrdered(@FormDataParam("contents") InputStream contentsInputStream,
+                                   @FormDataParam("contents") FormDataContentDisposition contentsMetaData,
+                                   @FormDataParam("startTime") UUID startTime,
+                                   @FormDataParam("dependency") UUID dependency,
+                                   @PathParam("filters") List<PathSegment> filters) throws Exception {
+        return publishItem(contentsInputStream, startTime, dependency, filters);
+    }
+
+    @GET
+    @Path("/ordered/consume")
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Timed
+    public Response consumeOrdered() throws Exception {
+        return consumeOrdered(ImmutableList.of());
+    }
+
+    @GET
+    @Path("/ordered/consume/{filters:.*}")
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Timed
+    public Response consumeOrdered(@PathParam("filters") List<PathSegment> filters) throws Exception {
+        return consumeItem(filters, true);
+    }
+
+    @DELETE
+    @Path("/ordered/delete/{startTime}")
+    @Consumes(MediaType.WILDCARD)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response deleteOrdered(@PathParam("startTime") UUID startTime) {
+        return deleteOrdered(startTime, ImmutableList.of());
+    }
+
+    @DELETE
+    @Path("/ordered/delete/{startTime}/{filters:.*}")
+    @Consumes(MediaType.WILDCARD)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response deleteOrdered(@PathParam("startTime") UUID startTime, @PathParam("filters") List<PathSegment> filters) {
         Map<String, String> filtersMap = buildFilters(filters);
-        Future<Optional<Item>> itemFuture = queueClient.consume(filtersMap);
-        Optional<Item> itemOptional = itemFuture.get();
+        queueClient.deleteOrdered(startTime, filtersMap);
+        return Response.status(Response.Status.ACCEPTED).build();
+    }
 
-        Response response = itemOptional.map(i -> {
-            StreamingOutput streamingOutput = output -> {
-                try {
-                    IOUtils.copy(new ByteArrayInputStream(i.getContents().array()), output);
-                } catch (Exception e) {
-                    throw new WebApplicationException(e);
-                }
-            };
+    private Response consumeItem(List<PathSegment> filters, boolean ordered) throws InterruptedException, java.util.concurrent.ExecutionException {
+        Map<String, String> filtersMap = buildFilters(filters);
 
-            return Response.ok(streamingOutput).header("X-Dqueue-Start-Time", i.getStartTime().toString()).build();
-        }).orElseGet(() -> Response.noContent().build());
+        Optional<Response> response = null;
+        if (ordered) {
+            Future<Optional<OrderedItem>> itemFuture = queueClient.consumeOrdered(filtersMap);
+            response = createConsumeOrderedResponse(itemFuture);
+        } else {
+            Future<Optional<Item>> itemFuture = queueClient.consume(filtersMap);
+            response = createConsumeResponse(itemFuture);
+        }
 
-        return response;
+        return response.orElseGet(() -> Response.noContent().build());
+    }
+
+    private Optional<Response> createConsumeResponse(Future<Optional<Item>> itemFuture) throws InterruptedException, java.util.concurrent.ExecutionException {
+        return itemFuture.get().map(i -> {
+            StreamingOutput streamingOutput = createStreamingOutput(i);
+            return Response
+                    .ok(streamingOutput)
+                    .header(X_DQUEUE_START_TIME_HEADER, i.getStartTime().toString())
+                    .build();
+        });
+    }
+
+    private Optional<Response> createConsumeOrderedResponse(Future<Optional<OrderedItem>> itemFuture) throws InterruptedException, java.util.concurrent.ExecutionException {
+        return itemFuture.get().map(i -> {
+            StreamingOutput streamingOutput = createStreamingOutput(i);
+            return Response
+                    .ok(streamingOutput)
+                    .header(X_DQUEUE_START_TIME_HEADER, i.getStartTime().toString())
+                    .header(X_DQUEUE_DEPENDENCY_HEADER, i.getDependency().toString())
+                    .build();
+        });
+    }
+
+    private StreamingOutput createStreamingOutput(Item item) {
+        return output -> {
+            try {
+                InputStream input = new ByteArrayInputStream(item.getContents().array());
+                IOUtils.copy(input, output);
+            } catch (Exception e) {
+                throw new WebApplicationException(e);
+            }
+        };
     }
 
     private Map<String, String> buildFilters(List<PathSegment> pathSegments) {
-        if (pathSegments.size() % 2 != 0) {
+        int size = pathSegments.size();
+        if (size == 0) {
+            return ImmutableMap.of();
+        }
+        if (size % 2 != 0) {
             throw new IllegalArgumentException("Filter path segments must be paired 'key/value'");
         }
         ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
-        for (int p = 0; p < pathSegments.size() / 2; p += 2) {
+        for (int p = 0; p < size; p += 2) {
             builder.put(pathSegments.get(p).getPath(), pathSegments.get(p + 1).getPath());
         }
         return builder.build();
+    }
+
+    private Response publishItem(InputStream contentsInputStream, UUID startTime, UUID dependency, List<PathSegment> filters) throws IOException {
+        Map<String, String> filtersMap = buildFilters(filters);
+        ByteBuffer byteBuffer = ByteBuffer.wrap(IOUtils.toByteArray(contentsInputStream));
+        if (dependency != null) {
+            OrderedItem item = new OrderedItem(startTime, dependency, byteBuffer, filtersMap);
+            queueClient.publishOrdered(item);
+        } else {
+            Item item = new Item(startTime, byteBuffer, filtersMap);
+            queueClient.publish(item);
+        }
+
+        return Response.status(Response.Status.ACCEPTED).build();
     }
 
 }

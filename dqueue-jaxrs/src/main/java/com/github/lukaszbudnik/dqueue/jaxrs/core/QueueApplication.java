@@ -10,8 +10,8 @@
 package com.github.lukaszbudnik.dqueue.jaxrs.core;
 
 import com.github.lukaszbudnik.cloudtag.CloudTagEnsembleProvider;
-import com.github.lukaszbudnik.dqueue.QueueClient;
 import com.github.lukaszbudnik.dqueue.QueueClientBuilder;
+import com.github.lukaszbudnik.dqueue.OrderedQueueClient;
 import com.github.lukaszbudnik.dqueue.jaxrs.service.QueueService;
 import com.github.lukaszbudnik.gpe.PropertiesElResolverModule;
 import com.google.inject.Guice;
@@ -48,7 +48,7 @@ public class QueueApplication extends Application<QueueConfiguration> {
         queueClientBuilder.withMetricRegistry(environment.metrics());
         queueClientBuilder.withHealthMetricRegistry(environment.healthChecks());
 
-        QueueClient queueClient = queueClientBuilder.build();
+        OrderedQueueClient queueClient = queueClientBuilder.buildSequential();
 
         environment.jersey().register(new QueueService(queueClient));
         environment.jersey().register(MultiPartFeature.class);

@@ -15,14 +15,14 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.UUID;
 
-public class SequentialItem extends Item {
+public class OrderedItem extends Item {
     private final UUID dependency;
 
-    public SequentialItem(UUID startTime, UUID dependency, ByteBuffer contents) {
+    public OrderedItem(UUID startTime, UUID dependency, ByteBuffer contents) {
         this(startTime, dependency, contents, ImmutableMap.of());
     }
 
-    public SequentialItem(UUID startTime, UUID dependency, ByteBuffer contents, Map<String, ?> filters) {
+    public OrderedItem(UUID startTime, UUID dependency, ByteBuffer contents, Map<String, String> filters) {
         super(startTime, contents, filters);
         this.dependency = dependency;
     }
@@ -37,17 +37,26 @@ public class SequentialItem extends Item {
         if (o == null || getClass() != o.getClass()) return false;
         if (!super.equals(o)) return false;
 
-        SequentialItem that = (SequentialItem) o;
+        OrderedItem that = (OrderedItem) o;
 
-        if (!dependency.equals(that.dependency)) return false;
+        return !(dependency != null ? !dependency.equals(that.dependency) : that.dependency != null);
 
-        return true;
     }
 
     @Override
     public int hashCode() {
         int result = super.hashCode();
-        result = 31 * result + dependency.hashCode();
+        result = 31 * result + (getDependency() != null ? getDependency().hashCode() : 0);
         return result;
+    }
+
+    @Override
+    public String toString() {
+        return "SequentialItem{" +
+                "startTime=" + getStartTime() +
+                ", dependency=" + dependency +
+                ", filters=" + getFilters() +
+                ", contents=" + getContents() +
+                '}';
     }
 }

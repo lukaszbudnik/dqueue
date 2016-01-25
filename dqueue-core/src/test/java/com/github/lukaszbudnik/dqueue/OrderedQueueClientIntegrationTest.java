@@ -45,13 +45,13 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 
-public class SequentialQueueClientIntegrationTest {
+public class OrderedQueueClientIntegrationTest {
 
     private static Injector injector;
     private static CuratorFramework zookeeperClient;
 
     private static String cassandraKeyspace = "test" + System.currentTimeMillis();
-    private SequentialQueueClientImpl queueClient;
+    private OrderedQueueClientImpl queueClient;
     private Session session;
     private MetricRegistry metricRegistry;
     private HealthCheckRegistry healthCheckRegistry;
@@ -75,7 +75,7 @@ public class SequentialQueueClientIntegrationTest {
         metricRegistry = new MetricRegistry();
         healthCheckRegistry = new HealthCheckRegistry();
 
-        queueClient = (SequentialQueueClientImpl) queueClientBuilder
+        queueClient = (OrderedQueueClientImpl) queueClientBuilder
                 .withCassandraKeyspace(cassandraKeyspace)
                 .withZookeeperClient(zookeeperClient)
                 .withMetricRegistry(metricRegistry)
@@ -117,51 +117,51 @@ public class SequentialQueueClientIntegrationTest {
 
     @Test
     public void shouldPublishSequential() throws ExecutionException, InterruptedException {
-        Future<ImmutableList<UUID>> futures = queueClient.publishSequential(
+        Future<ImmutableList<UUID>> futures = queueClient.publishOrdered(
                 new Item(UUIDs.timeBased(), ByteBuffer.wrap("A".getBytes())),
                 new Item(UUIDs.timeBased(), ByteBuffer.wrap("B".getBytes())),
                 new Item(UUIDs.timeBased(), ByteBuffer.wrap("C".getBytes()))
         );
         futures.get();
 
-        Future<Optional<SequentialItem>> optionalFutureA = queueClient.consumeSequential();
-        Optional<SequentialItem> itemOptionalA = optionalFutureA.get();
-        SequentialItem itemA = itemOptionalA.get();
+        Future<Optional<OrderedItem>> optionalFutureA = queueClient.consumeOrdered();
+        Optional<OrderedItem> itemOptionalA = optionalFutureA.get();
+        OrderedItem itemA = itemOptionalA.get();
 
         assertNotNull(itemA);
         assertEquals("A", new String(itemA.getContents().array()));
 
-        Future<Optional<SequentialItem>> optionalFutureB = queueClient.consumeSequential();
-        Optional<SequentialItem> itemOptionalB = optionalFutureB.get();
+        Future<Optional<OrderedItem>> optionalFutureB = queueClient.consumeOrdered();
+        Optional<OrderedItem> itemOptionalB = optionalFutureB.get();
 
         assertFalse(itemOptionalB.isPresent());
 
         queueClient.delete(itemA);
 
-        optionalFutureB = queueClient.consumeSequential();
+        optionalFutureB = queueClient.consumeOrdered();
         itemOptionalB = optionalFutureB.get();
-        SequentialItem itemB = itemOptionalB.get();
+        OrderedItem itemB = itemOptionalB.get();
 
         assertNotNull(itemB);
         assertEquals("B", new String(itemB.getContents().array()));
 
-        Future<Optional<SequentialItem>> optionalFutureC = queueClient.consumeSequential();
-        Optional<SequentialItem> itemOptionalC = optionalFutureC.get();
+        Future<Optional<OrderedItem>> optionalFutureC = queueClient.consumeOrdered();
+        Optional<OrderedItem> itemOptionalC = optionalFutureC.get();
 
         assertFalse(itemOptionalC.isPresent());
 
         queueClient.delete(itemB);
 
-        optionalFutureC = queueClient.consumeSequential();
+        optionalFutureC = queueClient.consumeOrdered();
         itemOptionalC = optionalFutureC.get();
-        SequentialItem itemC = itemOptionalC.get();
+        OrderedItem itemC = itemOptionalC.get();
 
         assertNotNull(itemC);
         assertEquals("C", new String(itemC.getContents().array()));
 
         queueClient.delete(itemC);
 
-        Future<Optional<SequentialItem>> empty = queueClient.consumeSequential();
+        Future<Optional<OrderedItem>> empty = queueClient.consumeOrdered();
         assertFalse(empty.get().isPresent());
     }
 
@@ -170,51 +170,51 @@ public class SequentialQueueClientIntegrationTest {
 
         Map<String, String> filters = ImmutableMap.of("filter1", "1", "filter2", "two");
 
-        Future<ImmutableList<UUID>> futures = queueClient.publishSequential(
+        Future<ImmutableList<UUID>> futures = queueClient.publishOrdered(
                 new Item(UUIDs.timeBased(), ByteBuffer.wrap("A".getBytes()), filters),
                 new Item(UUIDs.timeBased(), ByteBuffer.wrap("B".getBytes()), filters),
                 new Item(UUIDs.timeBased(), ByteBuffer.wrap("C".getBytes()), filters)
         );
         futures.get();
 
-        Future<Optional<SequentialItem>> optionalFutureA = queueClient.consumeSequential(filters);
-        Optional<SequentialItem> itemOptionalA = optionalFutureA.get();
-        SequentialItem itemA = itemOptionalA.get();
+        Future<Optional<OrderedItem>> optionalFutureA = queueClient.consumeOrdered(filters);
+        Optional<OrderedItem> itemOptionalA = optionalFutureA.get();
+        OrderedItem itemA = itemOptionalA.get();
 
         assertNotNull(itemA);
         assertEquals("A", new String(itemA.getContents().array()));
 
-        Future<Optional<SequentialItem>> optionalFutureB = queueClient.consumeSequential(filters);
-        Optional<SequentialItem> itemOptionalB = optionalFutureB.get();
+        Future<Optional<OrderedItem>> optionalFutureB = queueClient.consumeOrdered(filters);
+        Optional<OrderedItem> itemOptionalB = optionalFutureB.get();
 
         assertFalse(itemOptionalB.isPresent());
 
         queueClient.delete(itemA);
 
-        optionalFutureB = queueClient.consumeSequential(filters);
+        optionalFutureB = queueClient.consumeOrdered(filters);
         itemOptionalB = optionalFutureB.get();
-        SequentialItem itemB = itemOptionalB.get();
+        OrderedItem itemB = itemOptionalB.get();
 
         assertNotNull(itemB);
         assertEquals("B", new String(itemB.getContents().array()));
 
-        Future<Optional<SequentialItem>> optionalFutureC = queueClient.consumeSequential(filters);
-        Optional<SequentialItem> itemOptionalC = optionalFutureC.get();
+        Future<Optional<OrderedItem>> optionalFutureC = queueClient.consumeOrdered(filters);
+        Optional<OrderedItem> itemOptionalC = optionalFutureC.get();
 
         assertFalse(itemOptionalC.isPresent());
 
         queueClient.delete(itemB);
 
-        optionalFutureC = queueClient.consumeSequential(filters);
+        optionalFutureC = queueClient.consumeOrdered(filters);
         itemOptionalC = optionalFutureC.get();
-        SequentialItem itemC = itemOptionalC.get();
+        OrderedItem itemC = itemOptionalC.get();
 
         assertNotNull(itemC);
         assertEquals("C", new String(itemC.getContents().array()));
 
         queueClient.delete(itemC);
 
-        Future<Optional<SequentialItem>> empty = queueClient.consumeSequential(filters);
+        Future<Optional<OrderedItem>> empty = queueClient.consumeOrdered(filters);
         assertFalse(empty.get().isPresent());
     }
 

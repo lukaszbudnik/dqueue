@@ -10,16 +10,27 @@
 var dqueue = dqueue || {}
 
 dqueue.publish = function() {
+    var url = '/dqueue/v1'
+
     var fd = new FormData()
+
+    var dependency = $('#dependency').val().trim()
+    if (dependency.length > 0) {
+        url += '/ordered'
+        fd.append('dependency', dependency)
+    }
+
+    url += '/publish'
+
+
     $.each($('#contents'), function(i, obj) {
         fd.append('contents', obj.files[0])
     })
     fd.append('startTime', $('#startTime').val())
 
-    var url = '/dqueue/v1/publish'
-
-    if ($('#filters').val().trim().length > 0) {
-        url += '/' + $('#filters').val().trim()
+    var filters = $('#filters').val().trim()
+    if (filters.length > 0) {
+        url += '/' + filters
     }
 
     $.ajax({
@@ -29,10 +40,11 @@ dqueue.publish = function() {
       contentType: false,
       type: 'POST',
       success: function(data) {
-        alert('Published')
+        alert('Published to ==> ' + url)
       },
       error: function(data) {
         alert('Got error ==> ' + data)
       }
     })
 }
+

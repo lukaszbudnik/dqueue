@@ -36,47 +36,25 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Future;
 
-public class SequentialQueueClientImpl extends QueueClientImpl implements SequentialQueueClient {
+public class OrderedQueueClientImpl extends QueueClientImpl implements OrderedQueueClient {
 
-    private static final UUID zeroUUID = UUID.fromString("563dde00-219a-11b2-8080-808080808080");
     private static final int QUEUED = 0;
     private static final int FETCHED = 1;
 
-    SequentialQueueClientImpl(int cassandraPort, String[] cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient, int threadPoolSize, MetricRegistry metricRegistry, HealthCheckRegistry healthCheckRegistry) throws Exception {
+    OrderedQueueClientImpl(int cassandraPort, String[] cassandraAddress, String cassandraKeyspace, String cassandraTablePrefix, boolean cassandraCreateTables, CuratorFramework zookeeperClient, int threadPoolSize, MetricRegistry metricRegistry, HealthCheckRegistry healthCheckRegistry) throws Exception {
         super(cassandraPort, cassandraAddress, cassandraKeyspace, cassandraTablePrefix, cassandraCreateTables, zookeeperClient, threadPoolSize, metricRegistry, healthCheckRegistry);
     }
 
     @Override
-    public Future<ImmutableList<UUID>> publishSequential(List<Item> items) {
+    public Future<ImmutableList<UUID>> publishOrdered(List<Item> items) {
 
         Future<ImmutableList<UUID>> publishResult = executorService.submit(() -> {
             UUID dependency = zeroUUID;
             ImmutableList.Builder<UUID> uuids = ImmutableList.builder();
 
             for (Item item: items) {
-                String filterNames;
-                if (item.getFilters().isEmpty()) {
-                    filterNames = NO_FILTERS;
-                } else {
-                    filterNames = String.join("_", item.getFilters().keySet());
-                }
-                String wholeOperationMetricName = "dqueue.publish." + filterNames + ".whole.timer";
-                Optional<Timer.Context> publishTimer = Optional.ofNullable(metricRegistry).map(m -> m.timer(wholeOperationMetricName).time());
-
-                try {
-                    String tableName = createSequentialTableIfNotExists("publish", filterNames, item.getFilters());
-
-                    Insert insert = buildInsert(dependency, item, QUEUED, tableName + "_queued");
-
-                    String cassandraInsertMetricName = "dqueue.publish." + filterNames + ".cassandraInsertQueued.timer";
-                    executeAndMeasureTime(() -> session.executeAsync(insert).getUninterruptibly(), cassandraInsertMetricName);
-
-                    dependency = item.getStartTime();
-
-                    uuids.add(dependency);
-                } finally {
-                    publishTimer.ifPresent(Timer.Context::stop);
-                }
+                dependency = publishOrdered(dependency, item);
+                uuids.add(dependency);
             }
 
             return uuids.build();
@@ -86,15 +64,46 @@ public class SequentialQueueClientImpl extends QueueClientImpl implements Sequen
     }
 
     @Override
-    public void delete(SequentialItem item) {
+    public Future<UUID> publishOrdered(OrderedItem orderedItem) {
+        return executorService.submit(() -> publishOrdered(orderedItem.getDependency(), orderedItem));
+    }
+
+    private UUID publishOrdered(UUID dependency, Item item) {
         String filterNames;
         if (item.getFilters().isEmpty()) {
             filterNames = NO_FILTERS;
         } else {
             filterNames = String.join("_", item.getFilters().keySet());
         }
-        String tableName = createSequentialTableIfNotExists("delete", filterNames, item.getFilters());
-        Delete.Where delete = buildSequentialDelete(tableName + "_processing", item.getStartTime(), item.getFilters());
+        String wholeOperationMetricName = "dqueue.publish." + filterNames + ".whole.timer";
+        Optional<Timer.Context> publishTimer = Optional.ofNullable(metricRegistry).map(m -> m.timer(wholeOperationMetricName).time());
+
+        try {
+            String tableName = createSequentialTableIfNotExists("publish", filterNames, item.getFilters());
+
+            Insert insert = buildInsert(dependency, item, QUEUED, tableName + "_queued");
+
+            String cassandraInsertMetricName = "dqueue.publish." + filterNames + ".cassandraInsertQueued.timer";
+            executeAndMeasureTime(() -> session.executeAsync(insert).getUninterruptibly(), cassandraInsertMetricName);
+
+            dependency = item.getStartTime();
+
+        } finally {
+            publishTimer.ifPresent(Timer.Context::stop);
+        }
+        return dependency;
+    }
+
+    @Override
+    public void deleteOrdered(UUID startTime, Map<String, String> filters) {
+        String filterNames;
+        if (filters.isEmpty()) {
+            filterNames = NO_FILTERS;
+        } else {
+            filterNames = String.join("_", filters.keySet());
+        }
+        String tableName = createSequentialTableIfNotExists("delete", filterNames, filters);
+        Delete.Where delete = buildSequentialDelete(tableName + "_processing", startTime, filters);
         String cassandraDeleteOperationMetricName = "dqueue.consume." + filterNames + ".cassandraDelete.timer";
         executeAndMeasureTime(() -> session.executeAsync(delete).getUninterruptibly(), cassandraDeleteOperationMetricName);
     }
@@ -124,8 +133,8 @@ public class SequentialQueueClientImpl extends QueueClientImpl implements Sequen
     }
 
     @Override
-    public Future<Optional<SequentialItem>> consumeSequential(Map<String, String> filters) {
-        Future<Optional<SequentialItem>> itemFuture = executorService.submit(() -> {
+    public Future<Optional<OrderedItem>> consumeOrdered(Map<String, String> filters) {
+        Future<Optional<OrderedItem>> itemFuture = executorService.submit(() -> {
 
             String filterNames;
             if (filters.isEmpty()) {
@@ -185,7 +194,7 @@ public class SequentialQueueClientImpl extends QueueClientImpl implements Sequen
                     String cassandraInsertMetricName = "dqueue.publish." + filterNames + ".cassandraInsertFetched.timer";
                     executeAndMeasureTime(() -> session.executeAsync(insertFetched).getUninterruptibly(), cassandraInsertMetricName);
 
-                    return Optional.of(new SequentialItem(startTime, dependency, contents, filters));
+                    return Optional.of(new OrderedItem(startTime, dependency, contents, filters));
                 }
 
                 return Optional.empty();

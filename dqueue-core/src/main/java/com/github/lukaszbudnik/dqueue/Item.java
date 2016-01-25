@@ -17,13 +17,13 @@ import java.util.UUID;
 public class Item {
     private final UUID startTime;
     private final ByteBuffer contents;
-    private final Map<String, ?> filters;
+    private final Map<String, String> filters;
 
     public Item(UUID startTime, ByteBuffer contents) {
         this(startTime, contents, Collections.emptyMap());
     }
 
-    public Item(UUID startTime, ByteBuffer contents, Map<String, ?> filters) {
+    public Item(UUID startTime, ByteBuffer contents, Map<String, String> filters) {
         this.startTime = startTime;
         this.contents = contents;
         this.filters = filters;
@@ -37,7 +37,7 @@ public class Item {
         return contents;
     }
 
-    public Map<String, ?> getFilters() {
+    public Map<String, String> getFilters() {
         return filters;
     }
 

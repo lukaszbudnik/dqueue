@@ -104,8 +104,8 @@ public class QueueClientBuilder {
         return queueClient;
     }
 
-    public SequentialQueueClient buildSequential() throws Exception {
-        SequentialQueueClientImpl queueClient = new SequentialQueueClientImpl(cassandraPort, cassandraAddress.split(","), cassandraKeyspace, cassandraTablePrefix, cassandraCreateTables, zookeeperClient, threadPoolSize, metricRegistry, healthCheckRegistry);
+    public OrderedQueueClient buildSequential() throws Exception {
+        OrderedQueueClientImpl queueClient = new OrderedQueueClientImpl(cassandraPort, cassandraAddress.split(","), cassandraKeyspace, cassandraTablePrefix, cassandraCreateTables, zookeeperClient, threadPoolSize, metricRegistry, healthCheckRegistry);
         return queueClient;
     }
 

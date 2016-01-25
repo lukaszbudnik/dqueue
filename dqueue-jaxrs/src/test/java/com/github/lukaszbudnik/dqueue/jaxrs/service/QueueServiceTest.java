@@ -11,7 +11,8 @@ package com.github.lukaszbudnik.dqueue.jaxrs.service;
 
 import com.datastax.driver.core.utils.UUIDs;
 import com.github.lukaszbudnik.dqueue.Item;
-import com.github.lukaszbudnik.dqueue.QueueClient;
+import com.github.lukaszbudnik.dqueue.OrderedItem;
+import com.github.lukaszbudnik.dqueue.OrderedQueueClient;
 import com.google.common.collect.ImmutableMap;
 import io.dropwizard.testing.junit.ResourceTestRule;
 import org.apache.commons.io.IOUtils;
@@ -21,7 +22,11 @@ import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataMultiPart;
 import org.glassfish.jersey.media.multipart.MultiPart;
 import org.glassfish.jersey.media.multipart.MultiPartFeature;
-import org.junit.*;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.ClassRule;
+import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentMatcher;
 
@@ -43,11 +48,13 @@ import static org.mockito.Mockito.*;
 
 public class QueueServiceTest {
 
-    public static final QueueClient queueClient = mock(QueueClient.class);
+    public static final OrderedQueueClient queueClient = mock(OrderedQueueClient.class);
     public static final QueueService queueService = new QueueService(queueClient);
     public static final Item item = new Item(UUIDs.timeBased(), ByteBuffer.wrap("test".getBytes()));
-    public static final Map<String, String> filters = ImmutableMap.of("kkk", "vvv");
-    public static final Item itemWithFilters = new Item(UUIDs.timeBased(), ByteBuffer.wrap("test".getBytes()), filters);
+    public static final OrderedItem orderedItem = new OrderedItem(item.getStartTime(), OrderedQueueClient.zeroUUID, item.getContents());
+    public static final Map<String, String> filters = ImmutableMap.of("kkk", "vvv", "qqq", "www");
+    public static final Item itemWithFilters = new Item(UUIDs.timeBased(), item.getContents(), filters);
+    public static final OrderedItem orderedItemWithFilters = new OrderedItem(UUIDs.timeBased(), orderedItem.getDependency(), orderedItem.getContents(), filters);
 
     @ClassRule
     public static final ResourceTestRule resources = ResourceTestRule.builder().
@@ -59,8 +66,11 @@ public class QueueServiceTest {
     @Before
     public void before() {
         when(queueClient.publish(eq(item))).thenReturn(CompletableFuture.completedFuture(item.getStartTime()));
+        when(queueClient.publishOrdered(eq(orderedItem))).thenReturn(CompletableFuture.completedFuture(orderedItem.getStartTime()));
         when(queueClient.consume(argThat(new EmptyMap()))).thenReturn(CompletableFuture.completedFuture(Optional.of(item)));
         when(queueClient.consume(eq(filters))).thenReturn(CompletableFuture.completedFuture(Optional.of(itemWithFilters)));
+        when(queueClient.consumeOrdered(argThat(new EmptyMap()))).thenReturn(CompletableFuture.completedFuture(Optional.of(orderedItem)));
+        when(queueClient.consumeOrdered(eq(filters))).thenReturn(CompletableFuture.completedFuture(Optional.of(orderedItemWithFilters)));
     }
 
     @After
@@ -70,7 +80,7 @@ public class QueueServiceTest {
 
     @Test
     public void shouldPublishWithoutFilters() {
-        FormDataBodyPart formDataPart = new FormDataBodyPart("contents", "test".getBytes(), MediaType.APPLICATION_OCTET_STREAM_TYPE);
+        FormDataBodyPart formDataPart = new FormDataBodyPart("contents", item.getContents().array(), MediaType.APPLICATION_OCTET_STREAM_TYPE);
 
         MultiPart multiPart = new FormDataMultiPart().field("startTime", item.getStartTime().toString()).bodyPart(formDataPart);
 
@@ -86,18 +96,58 @@ public class QueueServiceTest {
 
     @Test
     public void shouldPublishWithFilters() {
-        FormDataBodyPart formDataPart = new FormDataBodyPart("contents", "test".getBytes(), MediaType.APPLICATION_OCTET_STREAM_TYPE);
+        FormDataBodyPart formDataPart = new FormDataBodyPart("contents", itemWithFilters.getContents().array(), MediaType.APPLICATION_OCTET_STREAM_TYPE);
 
         MultiPart multiPart = new FormDataMultiPart().field("startTime", itemWithFilters.getStartTime().toString()).bodyPart(formDataPart);
 
         Entity entity = Entity.entity(multiPart, MediaType.MULTIPART_FORM_DATA_TYPE);
 
         Response publishResponse = resources.client().register(MultiPartFeature.class)
-                .target("/dqueue/v1/publish/kkk/vvv").request().buildPost(entity).invoke();
+                .target("/dqueue/v1/publish/kkk/vvv/qqq/www").request().buildPost(entity).invoke();
 
         assertThat(publishResponse.getStatus(), equalTo(Response.Status.ACCEPTED.getStatusCode()));
 
         verify(queueClient, times(1)).publish(eq(itemWithFilters));
+    }
+
+    @Test
+    public void shouldPublishOrderedWithoutFilters() {
+        FormDataBodyPart formDataPart = new FormDataBodyPart("contents", item.getContents().array(), MediaType.APPLICATION_OCTET_STREAM_TYPE);
+
+        MultiPart multiPart = new FormDataMultiPart()
+                .field("startTime", item.getStartTime().toString())
+                .field("dependency", OrderedQueueClient.zeroUUID.toString())
+                .bodyPart(formDataPart);
+
+        Entity entity = Entity.entity(multiPart, MediaType.MULTIPART_FORM_DATA_TYPE);
+
+        Response publishResponse = resources.client().register(MultiPartFeature.class)
+                .target("/dqueue/v1/publishOrdered").request().buildPost(entity).invoke();
+
+        assertThat(publishResponse.getStatus(), equalTo(Response.Status.ACCEPTED.getStatusCode()));
+
+        verify(queueClient, times(1)).publishOrdered(eq(orderedItem));
+    }
+
+    @Test
+    public void shouldPublishOrderedWithFilters() {
+        FormDataBodyPart formDataPart = new FormDataBodyPart("contents", itemWithFilters.getContents().array(), MediaType.APPLICATION_OCTET_STREAM_TYPE);
+
+        MultiPart multiPart = new FormDataMultiPart()
+                .field("startTime", itemWithFilters.getStartTime().toString())
+                .field("dependency", OrderedQueueClient.zeroUUID.toString())
+                .bodyPart(formDataPart);
+
+        Entity entity = Entity.entity(multiPart, MediaType.MULTIPART_FORM_DATA_TYPE);
+
+        Response publishResponse = resources.client().register(MultiPartFeature.class)
+                .target("/dqueue/v1/publishOrdered/kkk/vvv/qqq/www").request().buildPost(entity).invoke();
+
+        assertThat(publishResponse.getStatus(), equalTo(Response.Status.ACCEPTED.getStatusCode()));
+
+        OrderedItem orderedItem = new OrderedItem(itemWithFilters.getStartTime(), OrderedQueueClient.zeroUUID, itemWithFilters.getContents(), itemWithFilters.getFilters());
+
+        verify(queueClient, times(1)).publishOrdered(eq(orderedItem));
     }
 
     @Test
@@ -112,7 +162,7 @@ public class QueueServiceTest {
         Entity entity = Entity.entity(multiPart, MediaType.MULTIPART_FORM_DATA_TYPE);
 
         resources.client().register(MultiPartFeature.class)
-                .target("/dqueue/v1/publish/kkk").request().buildPost(entity).invoke();
+                .target("/dqueue/v1/publish/kkk/vvv/qqq").request().buildPost(entity).invoke();
     }
 
     @Test
@@ -125,7 +175,7 @@ public class QueueServiceTest {
 
         ByteArrayInputStream bais = (ByteArrayInputStream)response.getEntity();
         byte[] contents = IOUtils.toByteArray(bais);
-        String startTime = clientResponse.getHeaderString("X-Dqueue-Start-Time");
+        String startTime = clientResponse.getHeaderString(QueueService.X_DQUEUE_START_TIME_HEADER);
 
         assertThat(response.getStatus(), equalTo(Response.Status.OK.getStatusCode()));
         assertThat(contents, equalTo(item.getContents().array()));
@@ -136,7 +186,7 @@ public class QueueServiceTest {
 
     @Test
     public void shouldConsumeWithFilters() throws IllegalAccessException, IOException {
-        Response response = resources.getJerseyTest().client().target("/dqueue/v1/consume/kkk/vvv").request()
+        Response response = resources.getJerseyTest().client().target("/dqueue/v1/consume/kkk/vvv/qqq/www").request()
                 .accept(MediaType.APPLICATION_OCTET_STREAM_TYPE)
                 .get();
 
@@ -144,14 +194,57 @@ public class QueueServiceTest {
 
         ByteArrayInputStream bais = (ByteArrayInputStream)response.getEntity();
         byte[] contents = IOUtils.toByteArray(bais);
-        String startTime = clientResponse.getHeaderString("X-Dqueue-Start-Time");
+        String startTime = clientResponse.getHeaderString(QueueService.X_DQUEUE_START_TIME_HEADER);
 
         assertThat(response.getStatus(), equalTo(Response.Status.OK.getStatusCode()));
         assertThat(contents, equalTo(itemWithFilters.getContents().array()));
         assertThat(startTime, equalTo(itemWithFilters.getStartTime().toString()));
 
-        verify(queueClient, times(1)).consume(eq(filters));
+        verify(queueClient, times(1)).consume(eq(itemWithFilters.getFilters()));
     }
+
+    @Test
+    public void shouldConsumeOrderedWithoutFilters() throws IllegalAccessException, IOException {
+        Response response = resources.getJerseyTest().client().target("/dqueue/v1/consumeOrdered").request()
+                .accept(MediaType.APPLICATION_OCTET_STREAM_TYPE)
+                .get();
+
+        ClientResponse clientResponse = (ClientResponse) FieldUtils.readField(response, "context", true);
+
+        ByteArrayInputStream bais = (ByteArrayInputStream)response.getEntity();
+        byte[] contents = IOUtils.toByteArray(bais);
+        String startTime = clientResponse.getHeaderString(QueueService.X_DQUEUE_START_TIME_HEADER);
+        String dependency = clientResponse.getHeaderString(QueueService.X_DQUEUE_DEPENDENCY_HEADER);
+
+        assertThat(response.getStatus(), equalTo(Response.Status.OK.getStatusCode()));
+        assertThat(contents, equalTo(orderedItem.getContents().array()));
+        assertThat(startTime, equalTo(orderedItem.getStartTime().toString()));
+        assertThat(dependency, equalTo(orderedItem.getDependency().toString()));
+
+        verify(queueClient, times(1)).consumeOrdered(argThat(new EmptyMap()));
+    }
+
+    @Test
+    public void shouldConsumeOrderedWithFilters() throws IllegalAccessException, IOException {
+        Response response = resources.getJerseyTest().client().target("/dqueue/v1/consumeOrdered/kkk/vvv/qqq/www").request()
+                .accept(MediaType.APPLICATION_OCTET_STREAM_TYPE)
+                .get();
+
+        ClientResponse clientResponse = (ClientResponse) FieldUtils.readField(response, "context", true);
+
+        ByteArrayInputStream bais = (ByteArrayInputStream)response.getEntity();
+        byte[] contents = IOUtils.toByteArray(bais);
+        String startTime = clientResponse.getHeaderString(QueueService.X_DQUEUE_START_TIME_HEADER);
+        String dependency = clientResponse.getHeaderString(QueueService.X_DQUEUE_DEPENDENCY_HEADER);
+
+        assertThat(response.getStatus(), equalTo(Response.Status.OK.getStatusCode()));
+        assertThat(contents, equalTo(orderedItemWithFilters.getContents().array()));
+        assertThat(startTime, equalTo(orderedItemWithFilters.getStartTime().toString()));
+        assertThat(dependency, equalTo(orderedItemWithFilters.getDependency().toString()));
+
+        verify(queueClient, times(1)).consumeOrdered(eq(orderedItemWithFilters.getFilters()));
+    }
+
 
     @Test
     public void shouldRejectConsumeWithNotPairedFilters() throws IllegalAccessException, IOException {
@@ -161,6 +254,35 @@ public class QueueServiceTest {
         resources.getJerseyTest().client().target("/dqueue/v1/consume/kkk").request()
                 .accept(MediaType.APPLICATION_OCTET_STREAM_TYPE)
                 .get();
+    }
+
+    @Test
+    public void shouldDeleteOrderedWithoutFilters() throws IllegalAccessException, IOException {
+        Response response = resources.getJerseyTest().client().target("/dqueue/v1/deleteOrdered/" + orderedItem.getStartTime()).request()
+                .delete();
+
+        assertThat(response.getStatus(), equalTo(Response.Status.ACCEPTED.getStatusCode()));
+
+        verify(queueClient, times(1)).deleteOrdered(eq(orderedItem.getStartTime()), argThat(new EmptyMap()));
+    }
+
+    @Test
+    public void shouldDeleteOrderedWithFilters() throws IllegalAccessException, IOException {
+        Response response = resources.getJerseyTest().client().target("/dqueue/v1/deleteOrdered/" + orderedItemWithFilters.getStartTime() + "/kkk/vvv/qqq/www").request()
+                .delete();
+
+        assertThat(response.getStatus(), equalTo(Response.Status.ACCEPTED.getStatusCode()));
+
+        verify(queueClient, times(1)).deleteOrdered(eq(orderedItemWithFilters.getStartTime()), eq(orderedItemWithFilters.getFilters()));
+    }
+
+    @Test
+    public void shouldRejectDeleteWithNotPairedFilters() throws IllegalAccessException, IOException {
+
+        thrown.expect(new NotPairedPathSegments());
+
+        resources.getJerseyTest().client().target("/dqueue/v1/deleteOrdered/" + item.getStartTime() + "/kkk").request()
+                .delete();
     }
 
     private class EmptyMap extends ArgumentMatcher<Map> {
