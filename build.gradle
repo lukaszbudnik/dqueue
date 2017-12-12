@@ -106,6 +106,6 @@ allprojects {
 
 project(':dqueue-jaxrs') {
     dependencies {
-        compile project(':dqueue')
+        compile project(':dqueue-core')
     }
 }

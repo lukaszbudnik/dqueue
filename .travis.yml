@@ -5,14 +5,14 @@ jdk:
 env:
   - DEPLOY_USERNAME=travis DEPLOY_PASSWORD=secret
 before_install:
-  - wget http://ftp.ps.pl/pub/apache/zookeeper/zookeeper-3.4.6/zookeeper-3.4.6.tar.gz
-  - tar -xzf zookeeper-3.4.6.tar.gz
-  - cd zookeeper-3.4.6
+  - wget http://ftp.ps.pl/pub/apache/zookeeper/zookeeper-3.4.11/zookeeper-3.4.11.tar.gz
+  - tar -xzf zookeeper-3.4.11.tar.gz
+  - cd zookeeper-3.4.11
   - bin/zkServer.sh start conf/zoo_sample.cfg
   - cd ..
-  - wget http://ftp.ps.pl/pub/apache/cassandra/2.2.4/apache-cassandra-2.2.4-bin.tar.gz
-  - tar -xzf apache-cassandra-2.2.4-bin.tar.gz
-  - cd apache-cassandra-2.2.4
+  - wget http://ftp.ps.pl/pub/apache/cassandra/2.2.11/apache-cassandra-2.2.11-bin.tar.gz
+  - tar -xzf apache-cassandra-2.2.11-bin.tar.gz
+  - cd apache-cassandra-2.2.11
   - bin/cassandra
   - cd ..
 after_failure:

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2015-2016 Łukasz Budnik <lukasz.budnik@gmail.com>
+ * Copyright (C) 2015-2017 Łukasz Budnik <lukasz.budnik@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
  *
@@ -10,8 +10,8 @@
 package com.github.lukaszbudnik.dqueue.jaxrs.core;
 
 import com.github.lukaszbudnik.cloudtag.CloudTagEnsembleProvider;
-import com.github.lukaszbudnik.dqueue.QueueClient;
 import com.github.lukaszbudnik.dqueue.QueueClientBuilder;
+import com.github.lukaszbudnik.dqueue.OrderedQueueClient;
 import com.github.lukaszbudnik.dqueue.jaxrs.service.QueueService;
 import com.github.lukaszbudnik.gpe.PropertiesElResolverModule;
 import com.google.inject.Guice;
@@ -48,7 +48,7 @@ public class QueueApplication extends Application<QueueConfiguration> {
         queueClientBuilder.withMetricRegistry(environment.metrics());
         queueClientBuilder.withHealthMetricRegistry(environment.healthChecks());
 
-        QueueClient queueClient = queueClientBuilder.build();
+        OrderedQueueClient queueClient = queueClientBuilder.buildOrdered();
 
         environment.jersey().register(new QueueService(queueClient));
         environment.jersey().register(MultiPartFeature.class);
